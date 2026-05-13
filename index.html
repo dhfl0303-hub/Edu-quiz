@@ -479,7 +479,7 @@
   </div>
   <div class="card" style="padding:16px;">
     <div style="font-size:13px;font-weight:500;margin-bottom:10px;" id="sign-user-info"></div>
-    <canvas id="sign-canvas" style="width:100%;height:180px;background:#fff;border-radius:var(--radius-sm);border:2px dashed var(--border);cursor:crosshair;display:block;touch-action:none;"></canvas>
+    <canvas id="sign-canvas" style="width:100%;height:360px;background:#fff;border-radius:var(--radius-sm);border:2px dashed var(--border);cursor:crosshair;display:block;touch-action:none;"></canvas>
     <div style="margin-top:10px;display:flex;gap:8px;">
       <button class="btn btn-outline btn-sm" onclick="clearSign()" style="width:auto;padding:8px 16px;font-size:13px;">지우기</button>
       <div style="flex:1;font-size:12px;color:var(--text-muted);display:flex;align-items:center;">손가락 또는 마우스로 서명</div>
@@ -2240,31 +2240,37 @@ let signCanvas = null, signCtx = null, isDrawing = false, hasSigned = false;
 
 function initSignCanvas() {
   signCanvas = document.getElementById('sign-canvas');
-  const dpr = window.devicePixelRatio || 1;
-  const rect = signCanvas.getBoundingClientRect();
-  signCanvas.width = rect.width * dpr;
-  signCanvas.height = 180 * dpr;
-  signCtx = signCanvas.getContext('2d');
-  signCtx.scale(dpr, dpr);
-  signCtx.strokeStyle = '#111';
-  signCtx.lineWidth = 2.5;
-  signCtx.lineCap = 'round';
-  signCtx.lineJoin = 'round';
   hasSigned = false;
+  isDrawing = false;
 
-  signCanvas.onmousedown  = e => { isDrawing=true; signCtx.beginPath(); signCtx.moveTo(getPos(e).x, getPos(e).y); };
-  signCanvas.onmousemove  = e => { if (!isDrawing) return; signCtx.lineTo(getPos(e).x, getPos(e).y); signCtx.stroke(); hasSigned=true; };
-  signCanvas.onmouseup    = () => isDrawing = false;
-  signCanvas.onmouseleave = () => isDrawing = false;
-  signCanvas.ontouchstart = e => { e.preventDefault(); isDrawing=true; signCtx.beginPath(); signCtx.moveTo(getPos(e).x, getPos(e).y); };
-  signCanvas.ontouchmove  = e => { e.preventDefault(); if (!isDrawing) return; signCtx.lineTo(getPos(e).x, getPos(e).y); signCtx.stroke(); hasSigned=true; };
-  signCanvas.ontouchend   = () => isDrawing = false;
+  // 한 프레임 뒤 실행 → 캔버스가 화면에 완전히 렌더링된 후 크기 측정
+  requestAnimationFrame(() => {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = signCanvas.getBoundingClientRect();
+    signCanvas.width = rect.width * dpr;
+    signCanvas.height = 360 * dpr;
+    signCtx = signCanvas.getContext('2d');
+    signCtx.scale(dpr, dpr);
+    signCtx.strokeStyle = '#111';
+    signCtx.lineWidth = 2.5;
+    signCtx.lineCap = 'round';
+    signCtx.lineJoin = 'round';
+
+    // 마우스 / 터치 / 터치 노트북 모두 pointer 이벤트로 통합
+    signCanvas.onpointerdown  = e => { signCanvas.setPointerCapture(e.pointerId); isDrawing=true; signCtx.beginPath(); signCtx.moveTo(getPos(e).x, getPos(e).y); };
+    signCanvas.onpointermove  = e => { if (!isDrawing) return; signCtx.lineTo(getPos(e).x, getPos(e).y); signCtx.stroke(); hasSigned=true; };
+    signCanvas.onpointerup    = () => isDrawing = false;
+    signCanvas.onpointerleave = () => isDrawing = false;
+    signCanvas.onpointercancel = () => isDrawing = false;
+  });
 }
 
 function getPos(e) {
   const rect = signCanvas.getBoundingClientRect();
-  if (e.touches) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  // pointer / mouse / touch 모두 처리
+  const clientX = e.clientX ?? (e.touches && e.touches[0].clientX);
+  const clientY = e.clientY ?? (e.touches && e.touches[0].clientY);
+  return { x: clientX - rect.left, y: clientY - rect.top };
 }
 
 function clearSign() {
