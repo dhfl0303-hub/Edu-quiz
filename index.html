@@ -390,6 +390,11 @@
   <div class="nav-back no-print" onclick="go('screen-admin-menu')">← 뒤로</div>
   <div class="logo" style="padding-top:8px;"><h1 style="font-size:18px;">통계</h1></div>
   <div id="stats-content"></div>
+  <div class="card no-print">
+    <div class="card-title">출력일 설정</div>
+    <input type="date" id="print-date">
+    <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">※ 오늘 날짜가 자동으로 설정되며 직접 수정 가능합니다.</p>
+  </div>
   <button class="print-btn no-print" onclick="printReport()">🖨️ PDF 인쇄 / 저장</button>
 </div>
 
@@ -865,6 +870,7 @@ async function goStats() {
   showLoading(false);
   go('screen-stats');
   renderStats();
+  document.getElementById('print-date').value = todayStr();
 }
 
 function renderStats() {
@@ -1089,7 +1095,7 @@ function printReport() {
   <div class="header">
     <div>
       <h2>${quiz.title} — 통계 보고서</h2>
-      <div class="sub">실시일: ${fmtDate(quiz.date)} &nbsp;|&nbsp; 출력일: ${fmtDate(todayStr())} &nbsp;|&nbsp; 전체 ${total}명</div>
+      <div class="sub">실시일: ${fmtDate(quiz.date)} &nbsp;|&nbsp; 출력일: ${fmtDate(document.getElementById('print-date').value || todayStr())} &nbsp;|&nbsp; 전체 ${total}명</div>
     </div>
     <div style="font-size:11px;color:#888;">교육 퀴즈 시스템</div>
   </div>
