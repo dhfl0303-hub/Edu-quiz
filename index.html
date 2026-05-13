@@ -271,6 +271,10 @@
       <div class="home-btn-icon red">🗑️</div>
       <div class="home-btn-text"><h3>응답 초기화</h3><p>이번 회차 응답 데이터 삭제</p></div>
     </div>
+    <div class="home-btn" onclick="goEmployees()">
+      <div class="home-btn-icon blue">👥</div>
+      <div class="home-btn-text"><h3>사원 관리</h3><p>사원 추가 · 수정 · 삭제</p></div>
+    </div>
   </div>
   <button class="btn btn-outline" onclick="go('screen-home')">로그아웃</button>
 </div>
@@ -447,6 +451,49 @@
   <div class="card" id="already-info"></div>
 </div>
 
+<!-- ══════════ 사원 관리 ══════════ -->
+<div class="screen" id="screen-employees">
+  <div class="nav-back" onclick="go('screen-admin-menu')">← 뒤로</div>
+  <div class="logo" style="padding-top:8px;"><h1 style="font-size:18px;">사원 관리</h1></div>
+
+  <!-- 추가 폼 -->
+  <div class="card">
+    <div class="card-title" id="emp-form-title">신규 사원 추가</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div>
+        <label>사번</label>
+        <input type="text" id="emp-sabun" placeholder="예: 0038" maxlength="10">
+      </div>
+      <div>
+        <label>이름</label>
+        <input type="text" id="emp-name" placeholder="이름">
+      </div>
+      <div>
+        <label>부서</label>
+        <input type="text" id="emp-dept" placeholder="예: 생산팀">
+      </div>
+      <div>
+        <label>직급</label>
+        <input type="text" id="emp-rank" placeholder="예: 사원">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-success" id="emp-save-btn" onclick="saveEmployee()" style="flex:1;">저장</button>
+      <button class="btn btn-outline" id="emp-cancel-btn" onclick="cancelEditEmployee()" style="display:none;flex:1;">취소</button>
+    </div>
+    <div id="emp-form-msg" style="font-size:13px;text-align:center;margin-top:8px;"></div>
+  </div>
+
+  <!-- 사원 목록 -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="card-title" style="margin-bottom:0;">전체 사원 <span id="emp-count" style="color:var(--accent);">0</span>명</div>
+      <input type="text" id="emp-search" placeholder="검색..." oninput="renderEmployeeList()" style="width:130px;padding:7px 10px;font-size:13px;">
+    </div>
+    <div id="emp-list"></div>
+  </div>
+</div>
+
 <!-- ══════════ 인쇄 영역 ══════════ -->
 <div id="print-area"></div>
 
@@ -498,6 +545,17 @@ window.fbDeleteResponses = async () => {
   await Promise.all(dels);
 };
 
+// 사원 저장 (전체)
+window.fbSaveEmployees = async (employees) => {
+  await setDoc(doc(db, 'settings', 'employees'), { list: employees });
+};
+
+// 사원 불러오기
+window.fbLoadEmployees = async () => {
+  const snap = await getDoc(doc(db, 'settings', 'employees'));
+  return snap.exists() ? snap.data().list : null;
+};
+
 // 초기 로드
 window.addEventListener('load', async () => {
   showLoading(true);
@@ -505,6 +563,15 @@ window.addEventListener('load', async () => {
     const quiz = await window.fbLoadQuiz();
     if (quiz) state.quiz = quiz;
     state.responses = await window.fbLoadResponses();
+
+    // 사원 데이터 불러오기 (없으면 기본 37명 저장)
+    const empData = await window.fbLoadEmployees();
+    if (empData) {
+      EMPLOYEES.length = 0;
+      empData.forEach(e => EMPLOYEES.push(e));
+    } else {
+      await window.fbSaveEmployees([...EMPLOYEES]);
+    }
   } catch(e) {
     console.error('Firebase 로드 오류:', e);
   }
@@ -1177,6 +1244,116 @@ async function submitSign() {
   document.getElementById('done-retrain').style.display = isRetrain ? 'block' : 'none';
   document.getElementById('done-score').style.color = isRetrain ? 'var(--danger)' : 'var(--accent)';
   go('screen-done');
+}
+
+// ── 사원 관리 ──
+let editingEmpSabun = null;
+
+async function goEmployees() {
+  go('screen-employees');
+  renderEmployeeList();
+}
+
+function renderEmployeeList() {
+  const search = document.getElementById('emp-search').value.trim().toLowerCase();
+  const filtered = EMPLOYEES.filter(e =>
+    e.name.includes(search) || e.sabun.includes(search) || e.dept.includes(search)
+  );
+  document.getElementById('emp-count').textContent = EMPLOYEES.length;
+
+  const listEl = document.getElementById('emp-list');
+  if (!filtered.length) {
+    listEl.innerHTML = '<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px;">검색 결과 없음</div>';
+    return;
+  }
+  listEl.innerHTML = filtered.map(e => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:600;">${e.name} <span style="font-size:11px;color:var(--text-muted);font-weight:400;">${e.sabun}</span></div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${e.dept} · ${e.rank}</div>
+      </div>
+      <button onclick="editEmployee('${e.sabun}')" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer;">수정</button>
+      <button onclick="deleteEmployee('${e.sabun}')" style="padding:6px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:6px;color:var(--danger);font-size:12px;cursor:pointer;">삭제</button>
+    </div>
+  `).join('');
+}
+
+function editEmployee(sabun) {
+  const emp = EMPLOYEES.find(e => e.sabun === sabun);
+  if (!emp) return;
+  editingEmpSabun = sabun;
+  document.getElementById('emp-sabun').value = emp.sabun;
+  document.getElementById('emp-sabun').disabled = true;
+  document.getElementById('emp-name').value = emp.name;
+  document.getElementById('emp-dept').value = emp.dept;
+  document.getElementById('emp-rank').value = emp.rank;
+  document.getElementById('emp-form-title').textContent = '사원 수정';
+  document.getElementById('emp-cancel-btn').style.display = 'block';
+  document.getElementById('emp-form-msg').textContent = '';
+  window.scrollTo(0, 0);
+}
+
+function cancelEditEmployee() {
+  editingEmpSabun = null;
+  document.getElementById('emp-sabun').value = '';
+  document.getElementById('emp-sabun').disabled = false;
+  document.getElementById('emp-name').value = '';
+  document.getElementById('emp-dept').value = '';
+  document.getElementById('emp-rank').value = '';
+  document.getElementById('emp-form-title').textContent = '신규 사원 추가';
+  document.getElementById('emp-cancel-btn').style.display = 'none';
+  document.getElementById('emp-form-msg').textContent = '';
+}
+
+async function saveEmployee() {
+  const sabun = document.getElementById('emp-sabun').value.trim();
+  const name = document.getElementById('emp-name').value.trim();
+  const dept = document.getElementById('emp-dept').value.trim();
+  const rank = document.getElementById('emp-rank').value.trim();
+  const msgEl = document.getElementById('emp-form-msg');
+
+  if (!sabun || !name || !dept || !rank) {
+    msgEl.style.color = 'var(--danger)'; msgEl.textContent = '모든 항목을 입력해주세요.'; return;
+  }
+
+  if (editingEmpSabun) {
+    const idx = EMPLOYEES.findIndex(e => e.sabun === editingEmpSabun);
+    if (idx !== -1) EMPLOYEES[idx] = { sabun: editingEmpSabun, name, dept, rank };
+  } else {
+    if (EMPLOYEES.find(e => e.sabun === sabun)) {
+      msgEl.style.color = 'var(--danger)'; msgEl.textContent = '이미 존재하는 사번입니다.'; return;
+    }
+    EMPLOYEES.push({ sabun, name, dept, rank });
+    EMPLOYEES.sort((a, b) => a.sabun.localeCompare(b.sabun));
+  }
+
+  showLoading(true, '저장 중...');
+  try {
+    await window.fbSaveEmployees([...EMPLOYEES]);
+    msgEl.style.color = 'var(--success)';
+    msgEl.textContent = editingEmpSabun ? '✅ 수정 완료!' : '✅ 추가 완료!';
+    cancelEditEmployee();
+    renderEmployeeList();
+  } catch(e) {
+    msgEl.style.color = 'var(--danger)'; msgEl.textContent = '저장 실패: ' + e.message;
+  }
+  showLoading(false);
+}
+
+async function deleteEmployee(sabun) {
+  const emp = EMPLOYEES.find(e => e.sabun === sabun);
+  if (!emp) return;
+  if (!confirm(`${emp.name} (${emp.sabun}) 을 삭제하시겠습니까?`)) return;
+  const idx = EMPLOYEES.findIndex(e => e.sabun === sabun);
+  EMPLOYEES.splice(idx, 1);
+  showLoading(true, '삭제 중...');
+  try {
+    await window.fbSaveEmployees([...EMPLOYEES]);
+    renderEmployeeList();
+  } catch(e) {
+    alert('삭제 실패: ' + e.message);
+  }
+  showLoading(false);
 }
 
 function showLoading(on, msg='불러오는 중...') {
