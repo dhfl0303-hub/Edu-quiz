@@ -442,6 +442,12 @@
     <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">※ 오늘 날짜가 자동으로 설정되며 직접 수정 가능합니다.</p>
   </div>
   <button class="print-btn no-print" onclick="printReport()">🖨️ PDF 인쇄 / 저장</button>
+  <div class="card no-print" style="border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.04);">
+    <div class="card-title" style="color:var(--danger);">이번 달 교육 마감</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">현재 교육 결과를 월별 기록으로 저장합니다. 저장 후 연간 통계 및 개인별 현황에서 조회할 수 있습니다.</p>
+    <button class="btn" style="background:var(--danger);color:#fff;width:100%;" onclick="closeMonthlyEdu()">📁 이번 달 교육 마감 및 저장</button>
+    <div id="close-month-msg" style="font-size:13px;text-align:center;margin-top:8px;"></div>
+  </div>
 </div>
 
 <!-- ══════════ 참여자 - 본인 확인 ══════════ -->
@@ -1148,18 +1154,18 @@ async function saveQuiz() {
     showSaveMsg('교육 대상자를 1명 이상 선택해주세요.', false); return;
   }
   state.quiz = { title, date, questions, targetMode: state.targetMode, targetSabuns: state.targetMode === 'select' ? [...state.targetSabuns] : [] };
-  state.responses = [];
 
   showLoading(true, '저장 중...');
   try {
-    // 기존 응답이 있으면 이번 달로 아카이브 저장
-    if (state.responses && state.responses.length > 0 && state.quiz) {
-      const prevQuiz = state.quiz;
+    // 기존 응답이 있으면 아카이브 먼저 저장 (state.responses 초기화 전에)
+    const prevResponses = [...state.responses];
+    const prevQuiz = state.quiz;
+    if (prevResponses.length > 0) {
       const prevDate = prevQuiz.date || '';
       const prevMonth = prevDate ? parseInt(prevDate.split('-')[1]) : new Date().getMonth() + 1;
       const prevYear = prevDate ? parseInt(prevDate.split('-')[0]) : new Date().getFullYear();
       try {
-        await window.fbSaveArchive(prevYear, prevMonth, prevQuiz, state.responses);
+        await window.fbSaveArchive(prevYear, prevMonth, prevQuiz, prevResponses);
       } catch(ae) { console.warn('아카이브 저장 실패(무시):', ae); }
     }
     await window.fbSaveQuiz(state.quiz);
@@ -2487,6 +2493,34 @@ function printPersonalDetail() {
     <div class="doc-footer" style="margin-top:8px;">※ 재교육 대상: 정답률 50% 미만 또는 미참여</div>
   </body></html>`;
   pdfOpen(html);
+}
+
+// ── 이번 달 교육 마감 ──
+async function closeMonthlyEdu() {
+  const msgEl = document.getElementById('close-month-msg');
+  if (!state.quiz) { msgEl.style.color='var(--danger)'; msgEl.textContent='등록된 교육이 없습니다.'; return; }
+
+  const quiz = state.quiz;
+  const date = quiz.date || todayStr();
+  const month = parseInt(date.split('-')[1]);
+  const year = parseInt(date.split('-')[0]);
+
+  const targetEmps = getTargetEmps(quiz);
+  const absentCount = targetEmps.filter(e => !state.responses.find(r => r.sabun === e.sabun)).length;
+  const absentMsg = absentCount > 0 ? `\n\n⚠️ 미응답자 ${absentCount}명이 있습니다.\n(결근·연차 등으로 미참여한 경우 마감 후 별도 재교육 진행)` : '';
+
+  if (!confirm(`${year}년 ${month}월 교육(${quiz.title})을 마감하고 저장하시겠습니까?${absentMsg}\n\n저장 후 연간 통계 및 개인별 현황에서 조회할 수 있습니다.`)) return;
+
+  showLoading(true, '마감 저장 중...');
+  try {
+    await window.fbSaveArchive(year, month, quiz, state.responses);
+    msgEl.style.color = 'var(--success)';
+    msgEl.textContent = `✅ ${year}년 ${month}월 교육이 저장되었습니다. 연간 통계에서 확인하세요.`;
+  } catch(e) {
+    msgEl.style.color = 'var(--danger)';
+    msgEl.textContent = '저장 실패: ' + e.message;
+  }
+  showLoading(false);
 }
 
 async function resetConfirm() {
