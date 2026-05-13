@@ -248,7 +248,37 @@
     <div style="margin-top:14px;"><button class="btn btn-primary" onclick="adminLogin()">로그인</button></div>
     <div id="login-error" class="msg-error" style="margin-top:10px;"></div>
   </div>
-  <p style="text-align:center;font-size:12px;color:var(--text-muted);">기본 비밀번호: 1234</p>
+  <button class="btn btn-outline" onclick="go('screen-pw-reset')">비밀번호 찾기</button>
+</div>
+
+<!-- ══════════ 비밀번호 찾기 ══════════ -->
+<div class="screen" id="screen-pw-reset">
+  <div class="nav-back" onclick="go('screen-admin-login')">← 뒤로</div>
+  <div class="logo"><div class="logo-badge">ADMIN</div><h1>비밀번호 찾기</h1></div>
+  <div class="card">
+    <label>등록된 전화번호 입력</label>
+    <input type="text" id="reset-phone" placeholder="전화번호 입력" maxlength="20" onkeydown="if(event.key==='Enter')resetPassword()">
+    <div style="margin-top:14px;"><button class="btn btn-primary" onclick="resetPassword()">확인</button></div>
+    <div id="reset-msg" style="font-size:13px;text-align:center;margin-top:10px;"></div>
+  </div>
+</div>
+
+<!-- ══════════ 비밀번호 변경 ══════════ -->
+<div class="screen" id="screen-pw-change">
+  <div class="nav-back" onclick="go('screen-admin-menu')">← 뒤로</div>
+  <div class="logo"><div class="logo-badge">ADMIN</div><h1>비밀번호 변경</h1></div>
+  <div class="card">
+    <label>현재 비밀번호</label>
+    <input type="password" id="pw-current" placeholder="현재 비밀번호">
+    <div style="height:14px;"></div>
+    <label>새 비밀번호</label>
+    <input type="password" id="pw-new" placeholder="새 비밀번호">
+    <div style="height:14px;"></div>
+    <label>새 비밀번호 확인</label>
+    <input type="password" id="pw-confirm" placeholder="새 비밀번호 다시 입력" onkeydown="if(event.key==='Enter')changePassword()">
+    <div style="margin-top:14px;"><button class="btn btn-success" onclick="changePassword()">변경 완료</button></div>
+    <div id="pw-change-msg" style="font-size:13px;text-align:center;margin-top:10px;"></div>
+  </div>
 </div>
 
 <!-- ══════════ 관리자 메뉴 ══════════ -->
@@ -274,6 +304,10 @@
     <div class="home-btn" onclick="goEmployees()">
       <div class="home-btn-icon blue">👥</div>
       <div class="home-btn-text"><h3>사원 관리</h3><p>사원 추가 · 수정 · 삭제</p></div>
+    </div>
+    <div class="home-btn" onclick="go('screen-pw-change');clearPwChange()">
+      <div class="home-btn-icon purple">🔑</div>
+      <div class="home-btn-text"><h3>비밀번호 변경</h3><p>관리자 비밀번호 수정</p></div>
     </div>
   </div>
   <button class="btn btn-outline" onclick="go('screen-home')">로그아웃</button>
@@ -570,6 +604,15 @@ window.fbDeleteResponses = async () => {
   await Promise.all(dels);
 };
 
+// 비밀번호 저장/불러오기
+window.fbSavePw = async (pw) => {
+  await setDoc(doc(db, 'settings', 'admin'), { password: pw });
+};
+window.fbLoadPw = async () => {
+  const snap = await getDoc(doc(db, 'settings', 'admin'));
+  return snap.exists() ? snap.data().password : null;
+};
+
 // 사원 저장 (전체)
 window.fbSaveEmployees = async (employees) => {
   await setDoc(doc(db, 'settings', 'employees'), { list: employees });
@@ -588,6 +631,10 @@ window.addEventListener('load', async () => {
     const quiz = await window.fbLoadQuiz();
     if (quiz) state.quiz = quiz;
     state.responses = await window.fbLoadResponses();
+
+    // 비밀번호 불러오기
+    const savedPw = await window.fbLoadPw();
+    if (savedPw) ADMIN_PW_REF.value = savedPw;
 
     // 사원 데이터 불러오기 (없으면 기본 37명 저장)
     const empData = await window.fbLoadEmployees();
@@ -646,7 +693,8 @@ const EMPLOYEES = [
   {sabun:'0037',dept:'관리팀',rank:'대리',name:'김민준'},
 ];
 
-const ADMIN_PW = '1234';
+const ADMIN_PW_REF = { value: '1234' };
+const ADMIN_PW = '1234'; // 초기값 (Firestore에서 덮어씀)
 const OPT_LABELS = ['①','②','③','④'];
 const TOTAL_Q = 4;
 const PASS_RATE = 0.5; // 50%
@@ -677,7 +725,7 @@ function go(id) {
 // ── 관리자 로그인 ──
 function adminLogin() {
   const pw = document.getElementById('admin-pw').value;
-  if (pw === ADMIN_PW) {
+  if (pw === ADMIN_PW_REF.value) {
     document.getElementById('admin-pw').value = '';
     document.getElementById('login-error').textContent = '';
     go('screen-admin-menu');
@@ -1332,6 +1380,57 @@ async function submitSign() {
   document.getElementById('done-retrain').style.display = isRetrain ? 'block' : 'none';
   document.getElementById('done-score').style.color = isRetrain ? 'var(--danger)' : 'var(--accent)';
   go('screen-done');
+}
+
+// ── 비밀번호 변경 ──
+function clearPwChange() {
+  document.getElementById('pw-current').value = '';
+  document.getElementById('pw-new').value = '';
+  document.getElementById('pw-confirm').value = '';
+  document.getElementById('pw-change-msg').textContent = '';
+}
+
+async function changePassword() {
+  const cur = document.getElementById('pw-current').value;
+  const nw = document.getElementById('pw-new').value;
+  const cf = document.getElementById('pw-confirm').value;
+  const msgEl = document.getElementById('pw-change-msg');
+
+  if (cur !== ADMIN_PW_REF.value) { msgEl.style.color='var(--danger)'; msgEl.textContent='현재 비밀번호가 틀렸습니다.'; return; }
+  if (!nw) { msgEl.style.color='var(--danger)'; msgEl.textContent='새 비밀번호를 입력해주세요.'; return; }
+  if (nw !== cf) { msgEl.style.color='var(--danger)'; msgEl.textContent='새 비밀번호가 일치하지 않습니다.'; return; }
+
+  showLoading(true, '저장 중...');
+  try {
+    await window.fbSavePw(nw);
+    ADMIN_PW_REF.value = nw;
+    msgEl.style.color='var(--success)'; msgEl.textContent='✅ 비밀번호가 변경되었습니다.';
+    clearPwChange();
+  } catch(e) {
+    msgEl.style.color='var(--danger)'; msgEl.textContent='저장 실패: ' + e.message;
+  }
+  showLoading(false);
+}
+
+// ── 비밀번호 찾기 (초기화) ──
+async function resetPassword() {
+  const phone = document.getElementById('reset-phone').value.trim().replace(/-/g,'');
+  const msgEl = document.getElementById('reset-msg');
+
+  if (phone !== '01090178004') {
+    msgEl.style.color='var(--danger)'; msgEl.textContent='등록된 전화번호와 일치하지 않습니다.'; return;
+  }
+
+  showLoading(true, '초기화 중...');
+  try {
+    await window.fbSavePw('1234');
+    ADMIN_PW_REF.value = '1234';
+    msgEl.style.color='var(--success)'; msgEl.textContent='✅ 비밀번호가 1234로 초기화되었습니다.';
+    document.getElementById('reset-phone').value = '';
+  } catch(e) {
+    msgEl.style.color='var(--danger)'; msgEl.textContent='초기화 실패: ' + e.message;
+  }
+  showLoading(false);
 }
 
 // ── 사원 관리 ──
