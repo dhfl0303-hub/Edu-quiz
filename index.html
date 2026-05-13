@@ -510,7 +510,10 @@
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div class="card-title" style="margin-bottom:0;">전체 사원 <span id="emp-count" style="color:var(--accent);">0</span>명</div>
-      <input type="text" id="emp-search" placeholder="검색..." oninput="renderEmployeeList()" style="width:130px;padding:7px 10px;font-size:13px;">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button id="sort-btn" onclick="toggleEmpSort()" style="padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:11px;cursor:pointer;">ㄱㄴㄷ순 ↕</button>
+        <input type="text" id="emp-search" placeholder="검색..." oninput="renderEmployeeList()" style="width:110px;padding:7px 10px;font-size:13px;">
+      </div>
     </div>
     <div id="emp-list"></div>
   </div>
@@ -1339,11 +1342,23 @@ async function goEmployees() {
   renderEmployeeList();
 }
 
+let empSortAZ = false;
+
+function toggleEmpSort() {
+  empSortAZ = !empSortAZ;
+  const btn = document.getElementById('sort-btn');
+  btn.style.color = empSortAZ ? 'var(--accent)' : 'var(--text-muted)';
+  btn.style.borderColor = empSortAZ ? 'var(--accent)' : 'var(--border)';
+  btn.textContent = empSortAZ ? 'ㄱㄴㄷ순 ✓' : 'ㄱㄴㄷ순 ↕';
+  renderEmployeeList();
+}
+
 function renderEmployeeList() {
   const search = document.getElementById('emp-search').value.trim().toLowerCase();
-  const filtered = EMPLOYEES.filter(e =>
+  let filtered = EMPLOYEES.filter(e =>
     e.name.includes(search) || e.sabun.includes(search) || e.dept.includes(search)
   );
+  if (empSortAZ) filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   document.getElementById('emp-count').textContent = EMPLOYEES.length;
 
   const listEl = document.getElementById('emp-list');
