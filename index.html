@@ -782,7 +782,11 @@ const db = getFirestore(app);
 
 // 퀴즈 저장
 window.fbSaveQuiz = async (quizData) => {
-  await setDoc(doc(db, 'quiz', 'current'), quizData);
+  if (quizData === null) {
+    await deleteDoc(doc(db, 'quiz', 'current'));
+  } else {
+    await setDoc(doc(db, 'quiz', 'current'), quizData);
+  }
 };
 
 // 퀴즈 불러오기
@@ -2514,8 +2518,13 @@ async function closeMonthlyEdu() {
   showLoading(true, '마감 저장 중...');
   try {
     await window.fbSaveArchive(year, month, quiz, state.responses);
+    // 마감 완료 후 현재 문제·응답 초기화
+    await window.fbSaveQuiz(null);
+    await window.fbDeleteResponses();
+    state.quiz = null;
+    state.responses = [];
     msgEl.style.color = 'var(--success)';
-    msgEl.textContent = `✅ ${year}년 ${month}월 교육이 저장되었습니다. 연간 통계에서 확인하세요.`;
+    msgEl.textContent = `✅ ${year}년 ${month}월 교육이 저장되었습니다. 문제가 초기화되었으니 다음 달 교육을 새로 등록해주세요.`;
   } catch(e) {
     msgEl.style.color = 'var(--danger)';
     msgEl.textContent = '저장 실패: ' + e.message;
