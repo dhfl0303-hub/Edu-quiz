@@ -292,6 +292,23 @@
     <label>실시일</label>
     <input type="date" id="edu-date">
     <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">※ 오늘 날짜가 자동으로 설정되며 직접 수정 가능합니다.</p>
+    <div style="height:14px;"></div>
+    <label>교육 대상</label>
+    <div style="display:flex;gap:10px;margin-bottom:10px;">
+      <button class="ans-btn" id="target-all-btn" onclick="setTargetMode('all')" style="flex:1;">전체 인원</button>
+      <button class="ans-btn" id="target-select-btn" onclick="setTargetMode('select')" style="flex:1;">특정 인원 선택</button>
+    </div>
+    <div id="target-select-area" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:13px;color:var(--text-muted);">선택된 인원: <span id="target-count" style="color:var(--accent);font-weight:700;">0</span>명</span>
+        <div style="display:flex;gap:6px;">
+          <button onclick="selectAllTarget(true)" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;cursor:pointer;">전체선택</button>
+          <button onclick="selectAllTarget(false)" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;cursor:pointer;">전체해제</button>
+        </div>
+      </div>
+      <input type="text" id="target-search" placeholder="이름/사번 검색..." oninput="renderTargetList()" style="margin-bottom:8px;padding:9px 12px;font-size:13px;">
+      <div id="target-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);"></div>
+    </div>
   </div>
 
   <!-- 객관식 1 -->
@@ -626,7 +643,7 @@ const OPT_LABELS = ['①','②','③','④'];
 const TOTAL_Q = 4;
 const PASS_RATE = 0.5; // 50%
 
-let state = { quiz: null, responses: [], q1Answer:null, q2Answer:null, q3Answer:null, q4Answer:null };
+let state = { quiz: null, responses: [], q1Answer:null, q2Answer:null, q3Answer:null, q4Answer:null, targetMode:'all', targetSabuns:[] };
 let currentParticipant = null;
 let currentQuizStep = 0;
 let currentAnswers = [];
@@ -668,7 +685,6 @@ function goRegister() {
 }
 
 function initRegister() {
-  // 오늘 날짜 자동 세팅
   const dateEl = document.getElementById('edu-date');
   if (!dateEl.value) dateEl.value = todayStr();
 
@@ -690,6 +706,12 @@ function initRegister() {
   document.getElementById('ox-o').classList.remove('selected');
   document.getElementById('ox-x').classList.remove('selected');
 
+  // 대상 초기화
+  const mode = state.quiz ? (state.quiz.targetMode || 'all') : 'all';
+  state.targetMode = mode;
+  state.targetSabuns = state.quiz ? (state.quiz.targetSabuns || []) : [];
+  setTargetMode(mode);
+
   // 기존값 복원
   if (state.quiz) {
     document.getElementById('edu-title').value = state.quiz.title || '';
@@ -708,6 +730,46 @@ function initRegister() {
       }
     });
   }
+}
+
+function setTargetMode(mode) {
+  state.targetMode = mode;
+  document.getElementById('target-all-btn').classList.toggle('selected', mode === 'all');
+  document.getElementById('target-select-btn').classList.toggle('selected', mode === 'select');
+  document.getElementById('target-select-area').style.display = mode === 'select' ? 'block' : 'none';
+  if (mode === 'select') renderTargetList();
+}
+
+function renderTargetList() {
+  const search = (document.getElementById('target-search').value || '').toLowerCase();
+  const filtered = EMPLOYEES.filter(e =>
+    e.name.includes(search) || e.sabun.includes(search)
+  );
+  document.getElementById('target-count').textContent = state.targetSabuns.length;
+  document.getElementById('target-list').innerHTML = filtered.map(e => {
+    const checked = state.targetSabuns.includes(e.sabun);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="toggleTarget('${e.sabun}')">
+      <div style="width:18px;height:18px;border-radius:4px;border:2px solid ${checked?'var(--accent)':'var(--border)'};background:${checked?'var(--accent)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        ${checked?'<span style="color:#fff;font-size:11px;font-weight:700;">✓</span>':''}
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:500;">${e.name} <span style="font-size:11px;color:var(--text-muted);">${e.sabun}</span></div>
+        <div style="font-size:11px;color:var(--text-muted);">${e.dept} · ${e.rank}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleTarget(sabun) {
+  const idx = state.targetSabuns.indexOf(sabun);
+  if (idx === -1) state.targetSabuns.push(sabun);
+  else state.targetSabuns.splice(idx, 1);
+  renderTargetList();
+}
+
+function selectAllTarget(checked) {
+  state.targetSabuns = checked ? EMPLOYEES.map(e => e.sabun) : [];
+  renderTargetList();
 }
 
 function selectAns(q, idx) {
@@ -750,7 +812,10 @@ async function saveQuiz() {
   if (!state.q4Answer) { showSaveMsg('OX 정답을 선택해주세요.', false); return; }
   questions.push({ type:'ox', text:q4text, answer:state.q4Answer });
 
-  state.quiz = { title, date, questions };
+  if (state.targetMode === 'select' && state.targetSabuns.length === 0) {
+    showSaveMsg('교육 대상자를 1명 이상 선택해주세요.', false); return;
+  }
+  state.quiz = { title, date, questions, targetMode: state.targetMode, targetSabuns: state.targetMode === 'select' ? [...state.targetSabuns] : [] };
   state.responses = [];
 
   showLoading(true, '저장 중...');
@@ -806,17 +871,23 @@ function renderStats() {
   const el = document.getElementById('stats-content');
   const quiz = state.quiz;
   const responses = state.responses;
-  const total = EMPLOYEES.length;
+
+  // 대상 인원 결정
+  const targetEmps = quiz.targetMode === 'select'
+    ? EMPLOYEES.filter(e => quiz.targetSabuns.includes(e.sabun))
+    : [...EMPLOYEES];
+
+  const total = targetEmps.length;
   const done = responses.length;
   const pct = total ? Math.round(done/total*100) : 0;
 
   const respondedSabuns = new Set(responses.map(r => r.sabun));
-  const absentees = EMPLOYEES.filter(e => !respondedSabuns.has(e.sabun));
+  const absentees = targetEmps.filter(e => !respondedSabuns.has(e.sabun));
   const retrainList = responses.filter(r => r.score / TOTAL_Q < PASS_RATE);
 
   // 부서별
   const depts = {};
-  EMPLOYEES.forEach(e => {
+  targetEmps.forEach(e => {
     if (!depts[e.dept]) depts[e.dept] = {total:0, done:0};
     depts[e.dept].total++;
     if (respondedSabuns.has(e.sabun)) depts[e.dept].done++;
@@ -960,15 +1031,18 @@ function renderStats() {
 function printReport() {
   const quiz = state.quiz;
   const responses = state.responses;
-  const total = EMPLOYEES.length;
+  const targetEmps = quiz.targetMode === 'select'
+    ? EMPLOYEES.filter(e => quiz.targetSabuns.includes(e.sabun))
+    : [...EMPLOYEES];
+  const total = targetEmps.length;
   const done = responses.length;
   const pct = total ? Math.round(done/total*100) : 0;
   const respondedSabuns = new Set(responses.map(r=>r.sabun));
-  const absentees = EMPLOYEES.filter(e=>!respondedSabuns.has(e.sabun));
+  const absentees = targetEmps.filter(e=>!respondedSabuns.has(e.sabun));
   const retrainList = responses.filter(r=>r.score/TOTAL_Q < PASS_RATE);
   const avgScore = responses.length ? Math.round(responses.reduce((s,r)=>s+r.score,0)/responses.length/TOTAL_Q*100) : 0;
 
-  const allRows = EMPLOYEES.map(emp => {
+  const allRows = targetEmps.map(emp => {
     const r = responses.find(x => x.sabun === emp.sabun);
     const missing = !r;
     const isR = r && r.score/TOTAL_Q < PASS_RATE;
@@ -1070,6 +1144,11 @@ function participantLogin() {
   const errEl = document.getElementById('p-login-error');
   const emp = EMPLOYEES.find(e => e.sabun===sabun && e.name===name);
   if (!emp) { errEl.textContent = '사번 또는 이름이 일치하지 않습니다.'; return; }
+
+  // 교육 대상자 체크
+  if (state.quiz.targetMode === 'select' && !state.quiz.targetSabuns.includes(sabun)) {
+    errEl.textContent = '이번 교육의 대상자가 아닙니다.'; return;
+  }
 
   const existing = state.responses.find(r => r.sabun===sabun);
   if (existing) {
