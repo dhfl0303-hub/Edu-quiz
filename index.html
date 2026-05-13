@@ -301,6 +301,14 @@
       <div class="home-btn-icon red">🗑️</div>
       <div class="home-btn-text"><h3>응답 초기화</h3><p>이번 회차 응답 데이터 삭제</p></div>
     </div>
+    <div class="home-btn" onclick="goAnnualStats()">
+      <div class="home-btn-icon blue">📅</div>
+      <div class="home-btn-text"><h3>연간 통계</h3><p>연도별 월간 교육 현황 한눈에 보기</p></div>
+    </div>
+    <div class="home-btn" onclick="goPersonalStats()">
+      <div class="home-btn-icon purple">👤</div>
+      <div class="home-btn-text"><h3>개인별 현황</h3><p>사원별 이수 이력 · 정답률 · 재교육</p></div>
+    </div>
     <div class="home-btn" onclick="goEmployees()">
       <div class="home-btn-icon blue">👥</div>
       <div class="home-btn-text"><h3>사원 관리</h3><p>사원 추가 · 수정 · 삭제</p></div>
@@ -507,6 +515,119 @@
   <div class="card" id="already-info"></div>
 </div>
 
+<!-- ══════════ 연간 통계 ══════════ -->
+<div class="screen" id="screen-annual-stats">
+  <div class="nav-back" onclick="go('screen-admin-menu')">← 뒤로</div>
+  <div class="logo" style="padding-top:8px;"><h1 style="font-size:18px;">연간 교육 통계</h1></div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <div class="card-title" style="margin-bottom:0;">연도 선택</div>
+      <select id="annual-year-select" onchange="renderAnnualStats()" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:14px;padding:8px 12px;outline:none;cursor:pointer;"></select>
+    </div>
+  </div>
+
+  <!-- 요약 카드 -->
+  <div class="stat-grid" id="annual-summary-grid"></div>
+
+  <!-- 월별 표 -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="overflow-x:auto;">
+      <table class="respondent-table" id="annual-table" style="min-width:480px;">
+        <thead>
+          <tr style="background:var(--surface2);">
+            <th style="width:36px;text-align:center;">월</th>
+            <th>교육명</th>
+            <th style="width:72px;text-align:center;">실시일</th>
+            <th style="width:44px;text-align:center;">대상</th>
+            <th style="width:44px;text-align:center;">참여</th>
+            <th style="width:60px;text-align:center;">참여율</th>
+            <th style="width:64px;text-align:center;">정답률</th>
+            <th style="width:56px;text-align:center;">재교육</th>
+          </tr>
+        </thead>
+        <tbody id="annual-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);text-align:right;">※ 재교육: 정답률 50% 미만 또는 미참여</div>
+  <button class="print-btn" onclick="printAnnualStats()">🖨️ 연간 통계 PDF 인쇄 / 저장</button>
+</div>
+
+<!-- ══════════ 개인별 현황 ══════════ -->
+<div class="screen" id="screen-personal-stats">
+  <div class="nav-back" onclick="go('screen-admin-menu')">← 뒤로</div>
+  <div class="logo" style="padding-top:8px;"><h1 style="font-size:18px;">개인별 교육 현황</h1></div>
+
+  <!-- 필터 / 검색 -->
+  <div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <input type="text" id="ps-search" placeholder="이름 / 사번 검색" oninput="renderPersonalList()" style="flex:1;min-width:120px;padding:10px 12px;font-size:13px;">
+      <select id="ps-year" onchange="renderPersonalList()" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;padding:9px 10px;outline:none;cursor:pointer;"></select>
+      <select id="ps-dept" onchange="renderPersonalList()" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;padding:9px 10px;outline:none;cursor:pointer;">
+        <option value="">전체 부서</option>
+      </select>
+      <select id="ps-status" onchange="renderPersonalList()" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;padding:9px 10px;outline:none;cursor:pointer;">
+        <option value="">전체</option>
+        <option value="ok">정상</option>
+        <option value="warn">주의</option>
+        <option value="danger">재교육</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 요약 -->
+  <div class="stat-grid" id="ps-summary-grid"></div>
+
+  <!-- 범례 -->
+  <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);padding:0 4px;">
+    <span style="display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(16,185,129,.15);color:var(--success);font-size:10px;font-weight:700;line-height:18px;text-align:center;">O</span> 이수(합격)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(245,158,11,.12);color:var(--warning);font-size:10px;font-weight:700;line-height:18px;text-align:center;">△</span> 이수(재교육)</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(239,68,68,.12);color:var(--danger);font-size:10px;font-weight:700;line-height:18px;text-align:center;">X</span> 미참여</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);color:var(--text-muted);font-size:9px;font-weight:700;line-height:18px;text-align:center;">-</span> 미실시</span>
+  </div>
+
+  <!-- 목록 / 상세 -->
+  <div id="ps-list-view">
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="overflow-x:auto;">
+        <table class="respondent-table" style="min-width:520px;" id="ps-table">
+          <thead>
+            <tr style="background:var(--surface2);">
+              <th style="min-width:120px;text-align:left;">이름</th>
+              <th style="width:40px;text-align:center;">1월</th>
+              <th style="width:40px;text-align:center;">2월</th>
+              <th style="width:40px;text-align:center;">3월</th>
+              <th style="width:40px;text-align:center;">4월</th>
+              <th style="width:40px;text-align:center;">5월</th>
+              <th style="width:40px;text-align:center;">6월</th>
+              <th style="width:40px;text-align:center;">7월</th>
+              <th style="width:40px;text-align:center;">8월</th>
+              <th style="width:40px;text-align:center;">9월</th>
+              <th style="width:40px;text-align:center;">10월</th>
+              <th style="width:40px;text-align:center;">11월</th>
+              <th style="width:40px;text-align:center;">12월</th>
+              <th style="width:52px;text-align:center;">이수율</th>
+              <th style="width:52px;text-align:center;">평균</th>
+              <th style="width:52px;text-align:center;">상태</th>
+            </tr>
+          </thead>
+          <tbody id="ps-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);text-align:right;">※ 이름 클릭 시 개인 상세 보기</div>
+    <button class="print-btn" onclick="printPersonalList()">🖨️ 전체 인원 PDF 인쇄 / 저장</button>
+  </div>
+
+  <!-- 개인 상세 -->
+  <div id="ps-detail-view" style="display:none;">
+    <div class="nav-back" onclick="psBack()" style="margin-bottom:0;">← 목록으로</div>
+    <div id="ps-detail-content"></div>
+    <button class="print-btn" onclick="printPersonalDetail()">🖨️ 개인 PDF 인쇄 / 저장</button>
+  </div>
+</div>
+
 <!-- ══════════ 사원 관리 ══════════ -->
 <div class="screen" id="screen-employees">
   <div class="nav-back" onclick="go('screen-admin-menu')">← 뒤로</div>
@@ -602,6 +723,53 @@ window.fbDeleteResponses = async () => {
   const snap = await getDocs(collection(db, 'responses'));
   const dels = snap.docs.map(d => deleteDoc(doc(db, 'responses', d.id)));
   await Promise.all(dels);
+};
+
+// ── 월별 아카이브 저장 ──
+window.fbSaveArchive = async (year, month, quizData, responses) => {
+  const key = `${year}-${String(month).padStart(2,'0')}`;
+  const targetEmps = quizData.targetMode === 'select'
+    ? responses.filter(r => quizData.targetSabuns.includes(r.sabun))
+    : responses;
+  const total = quizData.targetMode === 'select'
+    ? quizData.targetSabuns.length
+    : null; // null = 전체사원수는 저장 시점에 JS에서 계산
+  const avgScore = responses.length
+    ? Math.round(responses.reduce((s, r) => s + r.score, 0) / responses.length / 4 * 100)
+    : 0;
+  const retrainCount = responses.filter(r => r.score / 4 < 0.5).length;
+  await setDoc(doc(db, 'archives', key), {
+    year, month, key,
+    title: quizData.title,
+    date: quizData.date,
+    targetMode: quizData.targetMode,
+    targetSabuns: quizData.targetSabuns || [],
+    totalTarget: total,
+    attendCount: responses.length,
+    avgScore,
+    retrainCount,
+    responses: responses.map(r => ({
+      sabun: r.sabun, name: r.name, dept: r.dept, rank: r.rank,
+      score: r.score, time: r.time, answers: r.answers
+    })),
+    savedAt: new Date().toISOString()
+  });
+};
+
+// ── 연도별 아카이브 목록 불러오기 ──
+window.fbLoadArchivesByYear = async (year) => {
+  const snap = await getDocs(collection(db, 'archives'));
+  return snap.docs
+    .map(d => d.data())
+    .filter(d => d.year === year)
+    .sort((a, b) => a.month - b.month);
+};
+
+// ── 전체 아카이브 연도 목록 ──
+window.fbLoadArchiveYears = async () => {
+  const snap = await getDocs(collection(db, 'archives'));
+  const years = new Set(snap.docs.map(d => d.data().year));
+  return [...years].sort((a,b) => b - a);
 };
 
 // 비밀번호 저장/불러오기
@@ -876,8 +1044,19 @@ async function saveQuiz() {
 
   showLoading(true, '저장 중...');
   try {
+    // 기존 응답이 있으면 이번 달로 아카이브 저장
+    if (state.responses && state.responses.length > 0 && state.quiz) {
+      const prevQuiz = state.quiz;
+      const prevDate = prevQuiz.date || '';
+      const prevMonth = prevDate ? parseInt(prevDate.split('-')[1]) : new Date().getMonth() + 1;
+      const prevYear = prevDate ? parseInt(prevDate.split('-')[0]) : new Date().getFullYear();
+      try {
+        await window.fbSaveArchive(prevYear, prevMonth, prevQuiz, state.responses);
+      } catch(ae) { console.warn('아카이브 저장 실패(무시):', ae); }
+    }
     await window.fbSaveQuiz(state.quiz);
     await window.fbDeleteResponses();
+    state.responses = [];
     showSaveMsg('✅ 저장 완료!', true);
   } catch(e) {
     showSaveMsg('저장 실패: ' + e.message, false);
@@ -1150,6 +1329,32 @@ function printReport() {
     </div>
     <div style="font-size:11px;color:#888;">교육 퀴즈 시스템</div>
   </div>
+
+  <div class="section-title" style="color:#1565C0;">출제 문제 및 정답</div>
+  <table style="margin-bottom:14px;font-size:11px;border-collapse:collapse;width:100%;">
+    <thead><tr>
+      <th style="background:#1565C0;color:#fff;padding:6px 8px;width:30px;">번호</th>
+      <th style="background:#1565C0;color:#fff;padding:6px 8px;">문제</th>
+      <th style="background:#1565C0;color:#fff;padding:6px 8px;width:200px;">선택지</th>
+      <th style="background:#1565C0;color:#fff;padding:6px 8px;width:60px;text-align:center;">정답</th>
+    </tr></thead>
+    <tbody>
+      ${quiz.questions.map((q, i) => {
+        const answerText = q.type === 'ox'
+          ? q.answer
+          : `${['①','②','③','④'][q.answer]} ${q.options[q.answer]}`;
+        const choicesHtml = q.type === 'ox'
+          ? 'O  /  X'
+          : q.options.map((opt, oi) => `<span style="${oi===q.answer?'font-weight:700;color:#1565C0;':''}">${['①','②','③','④'][oi]} ${opt}</span>`).join('<br>');
+        return `<tr style="background:${i%2===0?'#f8f9fa':'#fff'};">
+          <td style="padding:6px 8px;text-align:center;font-weight:700;color:#333;">${i+1}</td>
+          <td style="padding:6px 8px;color:#333;">${q.text}</td>
+          <td style="padding:6px 8px;color:#555;font-size:10.5px;line-height:1.7;">${choicesHtml}</td>
+          <td style="padding:6px 8px;text-align:center;font-weight:700;color:#1565C0;">${answerText}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
   <div class="grid">
     <div class="scard"><div class="scard-num" style="color:#1a73e8;">${pct}%</div><div class="scard-label">응답률</div></div>
     <div class="scard"><div class="scard-num" style="color:#2e7d32;">${done}/${total}</div><div class="scard-label">참여 인원</div></div>
@@ -1168,6 +1373,727 @@ function printReport() {
   w.document.write(printHtml);
   w.document.close();
   w.onload = () => { w.focus(); w.print(); };
+}
+
+// ════════════════════════════════
+// 연간 통계
+// ════════════════════════════════
+let annualArchives = [];
+
+async function goAnnualStats() {
+  go('screen-annual-stats');
+  showLoading(true, '데이터 불러오는 중...');
+  try {
+    let years = await window.fbLoadArchiveYears();
+    const curYear = new Date().getFullYear();
+    if (!years.includes(curYear)) years = [curYear, ...years];
+    const sel = document.getElementById('annual-year-select');
+    sel.innerHTML = years.map(y => `<option value="${y}">${y}년</option>`).join('');
+    sel.value = curYear;
+    await loadAnnualYear(curYear);
+  } catch(e) { console.error(e); }
+  showLoading(false);
+}
+
+async function loadAnnualYear(year) {
+  annualArchives = await window.fbLoadArchivesByYear(parseInt(year));
+  renderAnnualStats();
+}
+
+async function renderAnnualStats() {
+  const year = parseInt(document.getElementById('annual-year-select').value);
+  if (annualArchives.length === 0 || annualArchives[0].year !== year) {
+    showLoading(true, '데이터 불러오는 중...');
+    annualArchives = await window.fbLoadArchivesByYear(year);
+    showLoading(false);
+  }
+
+  const done = annualArchives.filter(a => a.title);
+  const totalEmp = EMPLOYEES.length;
+
+  const totalAttend = done.reduce((s, a) => s + (a.attendCount || 0), 0);
+  const avgAttendRate = done.length
+    ? Math.round(done.reduce((s, a) => {
+        const tgt = a.targetMode === 'select' ? (a.targetSabuns || []).length : totalEmp;
+        return s + (tgt ? a.attendCount / tgt * 100 : 0);
+      }, 0) / done.length)
+    : 0;
+  const avgScore = done.length
+    ? Math.round(done.reduce((s, a) => s + (a.avgScore || 0), 0) / done.length)
+    : 0;
+  const totalRetrain = done.reduce((s, a) => s + (a.retrainCount || 0), 0);
+
+  document.getElementById('annual-summary-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-card-num" style="color:var(--accent);">${done.length}<span style="font-size:14px;font-weight:400;color:var(--text-muted);"> / 12</span></div>
+      <div class="stat-card-label">실시 교육 횟수</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-num" style="color:var(--success);">${avgAttendRate}%</div>
+      <div class="stat-card-label">평균 참여율</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-num" style="color:var(--accent);">${avgScore}%</div>
+      <div class="stat-card-label">평균 정답률</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-num" style="color:${totalRetrain > 0 ? 'var(--danger)' : 'var(--success)'};">${totalRetrain}명</div>
+      <div class="stat-card-label">누적 재교육</div>
+    </div>
+  `;
+
+  let html = '';
+  for (let m = 1; m <= 12; m++) {
+    const a = annualArchives.find(x => x.month === m);
+    if (!a) {
+      html += `<tr>
+        <td style="text-align:center;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);font-size:11px;font-weight:600;line-height:24px;text-align:center;color:var(--text-muted);">${m}</span></td>
+        <td colspan="7" style="color:var(--text-muted);font-size:12px;font-style:italic;">미실시</td>
+      </tr>`;
+      continue;
+    }
+    const tgt = a.targetMode === 'select' ? (a.targetSabuns || []).length : totalEmp;
+    const attendRate = tgt ? Math.round(a.attendCount / tgt * 100) : 0;
+    const rateColor = attendRate >= 90 ? 'var(--success)' : attendRate >= 70 ? 'var(--accent)' : 'var(--danger)';
+    const scoreColor = a.avgScore >= 80 ? 'var(--success)' : a.avgScore >= 60 ? 'var(--accent)' : 'var(--danger)';
+    const dateStr = a.date ? a.date.replace(/^\d{4}-/, '').replace('-', '/') : '-';
+    html += `<tr>
+      <td style="text-align:center;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);font-size:11px;font-weight:600;line-height:24px;text-align:center;color:var(--text-muted);">${m}</span></td>
+      <td style="font-size:13px;font-weight:600;">${a.title}</td>
+      <td style="text-align:center;font-size:12px;color:var(--text-muted);">${dateStr}</td>
+      <td style="text-align:center;">${tgt}</td>
+      <td style="text-align:center;">${a.attendCount}</td>
+      <td style="text-align:center;font-weight:700;color:${rateColor};">${attendRate}%</td>
+      <td style="text-align:center;font-weight:700;color:${scoreColor};">${a.avgScore}%</td>
+      <td style="text-align:center;">${a.retrainCount > 0
+        ? `<span class="badge badge-danger">${a.retrainCount}명</span>`
+        : '<span style="color:var(--text-muted);font-size:12px;">-</span>'}</td>
+    </tr>`;
+  }
+
+  // 합계 행
+  if (done.length > 0) {
+    const sumTgt = done.reduce((s, a) => {
+      const t = a.targetMode === 'select' ? (a.targetSabuns || []).length : totalEmp;
+      return s + t;
+    }, 0);
+    html += `<tr style="background:var(--surface2);font-size:12px;color:var(--text-muted);">
+      <td colspan="3" style="text-align:right;font-weight:600;padding-right:8px;">합계 / 평균</td>
+      <td style="text-align:center;font-weight:600;color:var(--text);">${sumTgt}</td>
+      <td style="text-align:center;font-weight:600;color:var(--text);">${totalAttend}</td>
+      <td style="text-align:center;font-weight:600;color:var(--text);">${avgAttendRate}%</td>
+      <td style="text-align:center;font-weight:600;color:var(--text);">${avgScore}%</td>
+      <td style="text-align:center;font-weight:600;color:${totalRetrain > 0 ? 'var(--danger)' : 'var(--success)'};">${totalRetrain}명</td>
+    </tr>`;
+  }
+
+  document.getElementById('annual-tbody').innerHTML = html;
+}
+
+// ════════════════════════════════
+// 개인별 현황
+// ════════════════════════════════
+let psArchives = [];
+let psYear = new Date().getFullYear();
+
+async function goPersonalStats() {
+  go('screen-personal-stats');
+  document.getElementById('ps-list-view').style.display = 'block';
+  document.getElementById('ps-detail-view').style.display = 'none';
+
+  showLoading(true, '데이터 불러오는 중...');
+  try {
+    let years = await window.fbLoadArchiveYears();
+    const curYear = new Date().getFullYear();
+    if (!years.includes(curYear)) years = [curYear, ...years];
+    psYear = curYear;
+
+    const ySel = document.getElementById('ps-year');
+    ySel.innerHTML = years.map(y => `<option value="${y}">${y}년</option>`).join('');
+    ySel.value = curYear;
+
+    // 부서 목록 동적 생성
+    const depts = [...new Set(EMPLOYEES.map(e => e.dept))].sort();
+    const dSel = document.getElementById('ps-dept');
+    dSel.innerHTML = '<option value="">전체 부서</option>' + depts.map(d => `<option>${d}</option>`).join('');
+
+    psArchives = await window.fbLoadArchivesByYear(curYear);
+  } catch(e) { console.error(e); }
+  showLoading(false);
+  renderPersonalList();
+}
+
+async function renderPersonalList() {
+  const year = parseInt(document.getElementById('ps-year').value);
+  if (year !== psYear) {
+    showLoading(true, '데이터 불러오는 중...');
+    psYear = year;
+    psArchives = await window.fbLoadArchivesByYear(year);
+    showLoading(false);
+  }
+
+  const search = document.getElementById('ps-search').value.toLowerCase();
+  const deptF = document.getElementById('ps-dept').value;
+  const statusF = document.getElementById('ps-status').value;
+  const totalEmp = EMPLOYEES.length;
+
+  function getPsStatus(emp) {
+    let attended = 0, retrains = 0, missed = 0;
+    psArchives.forEach(a => {
+      const inTarget = a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun);
+      if (!inTarget) return;
+      const r = (a.responses || []).find(x => x.sabun === emp.sabun);
+      if (!r) { missed++; return; }
+      attended++;
+      if (r.score / 4 < 0.5) retrains++;
+    });
+    if (retrains > 0 || missed > 1) return 'danger';
+    if (missed === 1) return 'warn';
+    return 'ok';
+  }
+
+  function getPsStats(emp) {
+    let attended = 0, totalScore = 0, retrains = 0, applicable = 0;
+    psArchives.forEach(a => {
+      const inTarget = a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun);
+      if (!inTarget) return;
+      applicable++;
+      const r = (a.responses || []).find(x => x.sabun === emp.sabun);
+      if (!r) return;
+      attended++;
+      totalScore += r.score;
+      if (r.score / 4 < 0.5) retrains++;
+    });
+    const rate = applicable ? Math.round(attended / applicable * 100) : 0;
+    const avg = attended ? Math.round(totalScore / attended / 4 * 100) : 0;
+    return { attended, applicable, rate, avg, retrains };
+  }
+
+  function dotHtml(emp, month) {
+    const a = psArchives.find(x => x.month === month);
+    if (!a) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);font-size:9px;line-height:18px;text-align:center;color:var(--text-muted);">-</span>`;
+    const inTarget = a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun);
+    if (!inTarget) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);font-size:9px;line-height:18px;text-align:center;color:var(--text-muted);">-</span>`;
+    const r = (a.responses || []).find(x => x.sabun === emp.sabun);
+    if (!r) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(239,68,68,.12);font-size:10px;font-weight:700;line-height:18px;text-align:center;color:var(--danger);">X</span>`;
+    if (r.score / 4 < 0.5) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(245,158,11,.12);font-size:10px;font-weight:700;line-height:18px;text-align:center;color:var(--warning);">△</span>`;
+    return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(16,185,129,.15);font-size:10px;font-weight:700;line-height:18px;text-align:center;color:var(--success);">O</span>`;
+  }
+
+  let filtered = EMPLOYEES.filter(e => {
+    const matchS = e.name.toLowerCase().includes(search) || e.sabun.includes(search);
+    const matchD = !deptF || e.dept === deptF;
+    const matchSt = !statusF || getPsStatus(e) === statusF;
+    return matchS && matchD && matchSt;
+  });
+
+  // 요약
+  const allOk = EMPLOYEES.filter(e => getPsStatus(e) === 'ok').length;
+  const allDanger = EMPLOYEES.filter(e => getPsStatus(e) === 'danger').length;
+  const avgScoreAll = EMPLOYEES.length
+    ? Math.round(EMPLOYEES.reduce((s, e) => s + getPsStats(e).avg, 0) / EMPLOYEES.length)
+    : 0;
+
+  document.getElementById('ps-summary-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-card-num" style="color:var(--accent);">${EMPLOYEES.length}명</div>
+      <div class="stat-card-label">전체 인원</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-num" style="color:var(--success);">${allOk}명</div>
+      <div class="stat-card-label">정상 이수</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-num" style="color:var(--danger);">${allDanger}명</div>
+      <div class="stat-card-label">재교육 대상</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-num" style="color:var(--accent);">${avgScoreAll > 0 ? avgScoreAll+'%' : '-'}</div>
+      <div class="stat-card-label">평균 정답률</div>
+    </div>
+  `;
+
+  let html = '';
+  filtered.forEach(emp => {
+    const s = getPsStats(emp);
+    const st = getPsStatus(emp);
+    const badge = st === 'ok'
+      ? `<span class="badge badge-success">정상</span>`
+      : st === 'warn'
+      ? `<span class="badge" style="background:rgba(245,158,11,.12);color:var(--warning);">주의</span>`
+      : `<span class="badge badge-danger">재교육</span>`;
+    const dots = [1,2,3,4,5,6,7,8,9,10,11,12].map(m =>
+      `<td style="text-align:center;">${dotHtml(emp, m)}</td>`
+    ).join('');
+    const rateColor = s.rate >= 80 ? 'var(--success)' : s.rate >= 60 ? 'var(--warning)' : 'var(--danger)';
+    const avgColor = s.avg >= 80 ? 'var(--success)' : s.avg >= 60 ? 'var(--accent)' : s.avg > 0 ? 'var(--danger)' : 'var(--text-muted)';
+    html += `<tr>
+      <td style="cursor:pointer;" onclick="psShowDetail('${emp.sabun}')">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:rgba(79,142,247,.15);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0;">${emp.name.slice(0,2)}</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;">${emp.name} <span style="font-size:11px;color:var(--text-muted);font-weight:400;">${emp.sabun}</span></div>
+            <div style="font-size:11px;color:var(--text-muted);">${emp.dept} · ${emp.rank}</div>
+          </div>
+        </div>
+      </td>
+      ${dots}
+      <td style="text-align:center;font-weight:700;color:${rateColor};">${s.rate}%</td>
+      <td style="text-align:center;font-weight:700;color:${avgColor};">${s.avg > 0 ? s.avg+'%' : '-'}</td>
+      <td style="text-align:center;">${badge}</td>
+    </tr>`;
+  });
+
+  if (!html) html = `<tr><td colspan="16" style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">검색 결과 없음</td></tr>`;
+  document.getElementById('ps-tbody').innerHTML = html;
+}
+
+function psShowDetail(sabun) {
+  const emp = EMPLOYEES.find(e => e.sabun === sabun);
+  if (!emp) return;
+  psCurrentSabun = sabun;
+
+  let attended = 0, totalScore = 0, retrains = 0, applicable = 0;
+  psArchives.forEach(a => {
+    const inTarget = a.targetMode !== 'select' || (a.targetSabuns || []).includes(sabun);
+    if (!inTarget) return;
+    applicable++;
+    const r = (a.responses || []).find(x => x.sabun === sabun);
+    if (!r) return;
+    attended++;
+    totalScore += r.score;
+    if (r.score / 4 < 0.5) retrains++;
+  });
+  const rate = applicable ? Math.round(attended / applicable * 100) : 0;
+  const avg = attended ? Math.round(totalScore / attended / 4 * 100) : 0;
+  const st = retrains > 0 ? 'danger' : (applicable - attended) > 1 ? 'danger' : (applicable - attended) === 1 ? 'warn' : 'ok';
+  const badge = st === 'ok'
+    ? `<span class="badge badge-success">정상 이수</span>`
+    : st === 'warn'
+    ? `<span class="badge" style="background:rgba(245,158,11,.12);color:var(--warning);">주의</span>`
+    : `<span class="badge badge-danger">재교육 대상</span>`;
+
+  let rows = '';
+  for (let m = 1; m <= 12; m++) {
+    const a = psArchives.find(x => x.month === m);
+    if (!a) {
+      rows += `<tr>
+        <td style="text-align:center;font-size:12px;color:var(--text-muted);">${m}월</td>
+        <td style="font-size:12px;color:var(--text-muted);">미실시</td>
+        <td style="text-align:center;font-size:12px;color:var(--text-muted);">-</td>
+        <td style="text-align:center;"><span class="badge" style="background:var(--surface2);color:var(--text-muted);">미실시</span></td>
+        <td style="text-align:center;color:var(--text-muted);font-size:12px;">-</td>
+      </tr>`;
+      continue;
+    }
+    const inTarget = a.targetMode !== 'select' || (a.targetSabuns || []).includes(sabun);
+    if (!inTarget) {
+      rows += `<tr>
+        <td style="text-align:center;font-size:12px;color:var(--text-muted);">${m}월</td>
+        <td style="font-size:12px;color:var(--text-muted);">${a.title}</td>
+        <td style="text-align:center;font-size:12px;color:var(--text-muted);">${a.date ? a.date.replace(/^\d{4}-/,'').replace('-','/') : '-'}</td>
+        <td style="text-align:center;"><span class="badge" style="background:var(--surface2);color:var(--text-muted);">비대상</span></td>
+        <td style="text-align:center;color:var(--text-muted);font-size:12px;">-</td>
+      </tr>`;
+      continue;
+    }
+    const r = (a.responses || []).find(x => x.sabun === sabun);
+    const dateStr = a.date ? a.date.replace(/^\d{4}-/,'').replace('-','/') : '-';
+    if (!r) {
+      rows += `<tr>
+        <td style="text-align:center;font-size:12px;">${m}월</td>
+        <td style="font-size:12px;">${a.title}</td>
+        <td style="text-align:center;font-size:12px;color:var(--text-muted);">${dateStr}</td>
+        <td style="text-align:center;"><span class="badge badge-danger">미참여</span></td>
+        <td style="text-align:center;color:var(--text-muted);font-size:12px;">-</td>
+      </tr>`;
+    } else {
+      const pct = Math.round(r.score / 4 * 100);
+      const isR = r.score / 4 < 0.5;
+      rows += `<tr>
+        <td style="text-align:center;font-size:12px;">${m}월</td>
+        <td style="font-size:12px;font-weight:600;">${a.title}</td>
+        <td style="text-align:center;font-size:12px;color:var(--text-muted);">${dateStr}</td>
+        <td style="text-align:center;">${isR ? `<span class="badge badge-danger">재교육</span>` : `<span class="badge badge-success">이수</span>`}</td>
+        <td style="text-align:center;font-weight:700;color:${isR ? 'var(--danger)' : 'var(--success)'};">${pct}%</td>
+      </tr>`;
+    }
+  }
+
+  document.getElementById('ps-detail-content').innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+      <div style="width:44px;height:44px;border-radius:50%;background:rgba(79,142,247,.15);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--accent);flex-shrink:0;">${emp.name.slice(0,2)}</div>
+      <div style="flex:1;">
+        <div style="font-size:16px;font-weight:700;">${emp.name} ${badge}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:3px;">${emp.sabun} · ${emp.dept} · ${emp.rank}</div>
+      </div>
+    </div>
+    <div class="stat-grid" style="margin-bottom:16px;">
+      <div class="stat-card"><div class="stat-card-num" style="color:var(--accent);">${attended}<span style="font-size:13px;font-weight:400;color:var(--text-muted);"> / ${applicable}</span></div><div class="stat-card-label">이수 교육</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:${rate>=80?'var(--success)':rate>=60?'var(--warning)':'var(--danger)'};">${rate}%</div><div class="stat-card-label">이수율</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:${avg>=80?'var(--success)':avg>=60?'var(--accent)':avg>0?'var(--danger)':'var(--text-muted)'};">${avg > 0 ? avg+'%' : '-'}</div><div class="stat-card-label">평균 정답률</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:${retrains>0?'var(--danger)':'var(--success)'};">${retrains}회</div><div class="stat-card-label">재교육 횟수</div></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table class="respondent-table" style="min-width:360px;">
+        <thead>
+          <tr style="background:var(--surface2);">
+            <th style="width:36px;text-align:center;">월</th>
+            <th>교육명</th>
+            <th style="width:56px;text-align:center;">실시일</th>
+            <th style="width:64px;text-align:center;">참여</th>
+            <th style="width:56px;text-align:center;">점수</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+
+  document.getElementById('ps-list-view').style.display = 'none';
+  document.getElementById('ps-detail-view').style.display = 'block';
+  window.scrollTo(0,0);
+}
+
+function psBack() {
+  document.getElementById('ps-list-view').style.display = 'block';
+  document.getElementById('ps-detail-view').style.display = 'none';
+}
+
+// ════════════════════════════════
+// PDF 공통 스타일
+// ════════════════════════════════
+function pdfBaseStyle() {
+  return `
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Noto Sans KR', sans-serif; color: #111; background: #fff; font-size: 12px; padding: 24px 30px; }
+      .doc-header { border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+      .doc-header h1 { font-size: 18px; font-weight: 700; }
+      .doc-header .sub { font-size: 11px; color: #666; margin-top: 4px; }
+      .doc-footer { font-size: 10px; color: #aaa; text-align: right; margin-top: 4px; }
+      .summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 18px; }
+      .s-card { background: #f5f5f5; border-radius: 6px; padding: 10px 12px; text-align: center; }
+      .s-num { font-size: 20px; font-weight: 700; }
+      .s-label { font-size: 10px; color: #666; margin-top: 3px; }
+      .section-title { font-size: 12px; font-weight: 700; color: #333; margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #ddd; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th { background: #eee; padding: 7px 8px; text-align: center; font-weight: 700; color: #444; border: 0.5px solid #ddd; }
+      th.left { text-align: left; }
+      td { padding: 7px 8px; border: 0.5px solid #e8e8e8; text-align: center; vertical-align: middle; }
+      td.left { text-align: left; }
+      tr:nth-child(even) { background: #fafafa; }
+      .badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+      .badge-ok { background: #e8f5e9; color: #2e7d32; }
+      .badge-warn { background: #fff8e1; color: #f57f17; }
+      .badge-danger { background: #ffebee; color: #c62828; }
+      .badge-gray { background: #f5f5f5; color: #888; }
+      .dot-o { display:inline-block;width:18px;height:18px;border-radius:50%;background:#e8f5e9;color:#2e7d32;font-size:9px;font-weight:700;line-height:18px;text-align:center; }
+      .dot-t { display:inline-block;width:18px;height:18px;border-radius:50%;background:#fff8e1;color:#f57f17;font-size:9px;font-weight:700;line-height:18px;text-align:center; }
+      .dot-x { display:inline-block;width:18px;height:18px;border-radius:50%;background:#ffebee;color:#c62828;font-size:9px;font-weight:700;line-height:18px;text-align:center; }
+      .dot-n { display:inline-block;width:18px;height:18px;border-radius:50%;background:#f5f5f5;color:#aaa;font-size:9px;font-weight:700;line-height:18px;text-align:center; }
+      .footer-row td { background: #f0f0f0; font-weight: 700; color: #333; border-top: 1px solid #ccc; }
+      @media print { body { padding: 10px 16px; } @page { margin: 10mm; size: A4 landscape; } }
+    </style>`;
+}
+
+function pdfOpen(html) {
+  const w = window.open('', '_blank', 'width=900,height=800');
+  w.document.write(html);
+  w.document.close();
+  w.onload = () => { w.focus(); w.print(); };
+}
+
+function todayFmt() {
+  const d = new Date();
+  return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`;
+}
+
+// ── 연간 통계 PDF ──
+function printAnnualStats() {
+  const year = document.getElementById('annual-year-select').value;
+  const totalEmp = EMPLOYEES.length;
+  const done = annualArchives.filter(a => a.title);
+
+  const avgAttendRate = done.length
+    ? Math.round(done.reduce((s,a) => {
+        const t = a.targetMode==='select' ? (a.targetSabuns||[]).length : totalEmp;
+        return s + (t ? a.attendCount/t*100 : 0);
+      }, 0) / done.length)
+    : 0;
+  const avgScore = done.length ? Math.round(done.reduce((s,a)=>s+(a.avgScore||0),0)/done.length) : 0;
+  const totalRetrain = done.reduce((s,a)=>s+(a.retrainCount||0),0);
+  const totalAttend = done.reduce((s,a)=>s+(a.attendCount||0),0);
+  const sumTgt = done.reduce((s,a) => {
+    const t = a.targetMode==='select' ? (a.targetSabuns||[]).length : totalEmp;
+    return s + t;
+  }, 0);
+
+  let rows = '';
+  for (let m = 1; m <= 12; m++) {
+    const a = annualArchives.find(x => x.month === m);
+    if (!a) {
+      rows += `<tr><td>${m}월</td><td class="left" colspan="7" style="color:#aaa;font-style:italic;">미실시</td></tr>`;
+      continue;
+    }
+    const tgt = a.targetMode==='select' ? (a.targetSabuns||[]).length : totalEmp;
+    const attendRate = tgt ? Math.round(a.attendCount/tgt*100) : 0;
+    const dateStr = a.date ? a.date.replace(/^\d{4}-/,'').replace('-','/') : '-';
+    const rateColor = attendRate>=90?'#2e7d32':attendRate>=70?'#1565C0':'#c62828';
+    const scoreColor = a.avgScore>=80?'#2e7d32':a.avgScore>=60?'#1565C0':'#c62828';
+    rows += `<tr>
+      <td>${m}월</td>
+      <td class="left" style="font-weight:600;">${a.title}</td>
+      <td>${dateStr}</td>
+      <td>${tgt}</td>
+      <td>${a.attendCount}</td>
+      <td style="font-weight:700;color:${rateColor};">${attendRate}%</td>
+      <td style="font-weight:700;color:${scoreColor};">${a.avgScore}%</td>
+      <td>${a.retrainCount>0 ? `<span class="badge badge-danger">${a.retrainCount}명</span>` : '-'}</td>
+    </tr>`;
+  }
+  if (done.length > 0) {
+    rows += `<tr class="footer-row">
+      <td colspan="3" style="text-align:right;">합계 / 평균</td>
+      <td>${sumTgt}</td><td>${totalAttend}</td>
+      <td>${avgAttendRate}%</td><td>${avgScore}%</td>
+      <td style="color:${totalRetrain>0?'#c62828':'#2e7d32'};">${totalRetrain}명</td>
+    </tr>`;
+  }
+
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">${pdfBaseStyle()}</head><body>
+    <div class="doc-header">
+      <div>
+        <h1>${year}년 연간 교육 통계 보고서</h1>
+        <div class="sub">출력일: ${todayFmt()} &nbsp;|&nbsp; 전체 사원: ${totalEmp}명</div>
+      </div>
+      <div style="font-size:11px;color:#888;">교육 퀴즈 시스템</div>
+    </div>
+    <div class="summary-grid">
+      <div class="s-card"><div class="s-num" style="color:#1565C0;">${done.length}<span style="font-size:13px;font-weight:400;color:#888;"> / 12회</span></div><div class="s-label">실시 교육</div></div>
+      <div class="s-card"><div class="s-num" style="color:#2e7d32;">${avgAttendRate}%</div><div class="s-label">평균 참여율</div></div>
+      <div class="s-card"><div class="s-num" style="color:#1565C0;">${avgScore}%</div><div class="s-label">평균 정답률</div></div>
+      <div class="s-card"><div class="s-num" style="color:${totalRetrain>0?'#c62828':'#2e7d32'};">${totalRetrain}명</div><div class="s-label">누적 재교육</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:36px;">월</th>
+        <th class="left">교육명</th>
+        <th style="width:60px;">실시일</th>
+        <th style="width:44px;">대상</th>
+        <th style="width:44px;">참여</th>
+        <th style="width:56px;">참여율</th>
+        <th style="width:60px;">정답률</th>
+        <th style="width:60px;">재교육</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="doc-footer" style="margin-top:10px;">※ 재교육 대상: 정답률 50% 미만 또는 미참여 인원</div>
+  </body></html>`;
+  pdfOpen(html);
+}
+
+// ── 개인별 전체 목록 PDF ──
+function printPersonalList() {
+  const year = parseInt(document.getElementById('ps-year').value);
+  const search = document.getElementById('ps-search').value.toLowerCase();
+  const deptF = document.getElementById('ps-dept').value;
+  const statusF = document.getElementById('ps-status').value;
+  const totalEmp = EMPLOYEES.length;
+
+  function getPsStatus2(emp) {
+    let retrains=0, missed=0;
+    psArchives.forEach(a => {
+      const inT = a.targetMode!=='select' || (a.targetSabuns||[]).includes(emp.sabun);
+      if (!inT) return;
+      const r = (a.responses||[]).find(x=>x.sabun===emp.sabun);
+      if (!r) { missed++; return; }
+      if (r.score/4<0.5) retrains++;
+    });
+    if (retrains>0||missed>1) return 'danger';
+    if (missed===1) return 'warn';
+    return 'ok';
+  }
+  function getPsStats2(emp) {
+    let attended=0,totalScore=0,retrains=0,applicable=0;
+    psArchives.forEach(a => {
+      const inT = a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun);
+      if (!inT) return;
+      applicable++;
+      const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
+      if (!r) return;
+      attended++; totalScore+=r.score;
+      if(r.score/4<0.5) retrains++;
+    });
+    const rate=applicable?Math.round(attended/applicable*100):0;
+    const avg=attended?Math.round(totalScore/attended/4*100):0;
+    return {attended,applicable,rate,avg,retrains};
+  }
+  function dotStr(emp, month) {
+    const a = psArchives.find(x=>x.month===month);
+    if (!a) return `<span class="dot-n">-</span>`;
+    const inT = a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun);
+    if (!inT) return `<span class="dot-n">-</span>`;
+    const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
+    if (!r) return `<span class="dot-x">X</span>`;
+    if(r.score/4<0.5) return `<span class="dot-t">△</span>`;
+    return `<span class="dot-o">O</span>`;
+  }
+
+  let filtered = EMPLOYEES.filter(e => {
+    const matchS = e.name.toLowerCase().includes(search)||e.sabun.includes(search);
+    const matchD = !deptF||e.dept===deptF;
+    const matchSt = !statusF||getPsStatus2(e)===statusF;
+    return matchS&&matchD&&matchSt;
+  });
+
+  const filterLabel = [
+    deptF ? deptF : '전체 부서',
+    statusF==='ok'?'정상':statusF==='warn'?'주의':statusF==='danger'?'재교육':'전체'
+  ].join(' · ');
+
+  let rows = filtered.map(emp => {
+    const s = getPsStats2(emp);
+    const st = getPsStatus2(emp);
+    const badgeHtml = st==='ok'
+      ? `<span class="badge badge-ok">정상</span>`
+      : st==='warn'
+      ? `<span class="badge badge-warn">주의</span>`
+      : `<span class="badge badge-danger">재교육</span>`;
+    const dots = [1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<td>${dotStr(emp,m)}</td>`).join('');
+    const rateColor = s.rate>=80?'#2e7d32':s.rate>=60?'#f57f17':'#c62828';
+    const avgColor = s.avg>=80?'#2e7d32':s.avg>=60?'#1565C0':s.avg>0?'#c62828':'#888';
+    return `<tr>
+      <td class="left"><span style="font-weight:600;">${emp.name}</span> <span style="font-size:10px;color:#888;">${emp.sabun}</span></td>
+      <td class="left" style="font-size:10px;color:#666;">${emp.dept}·${emp.rank}</td>
+      ${dots}
+      <td style="font-weight:700;color:${rateColor};">${s.rate}%</td>
+      <td style="font-weight:700;color:${avgColor};">${s.avg>0?s.avg+'%':'-'}</td>
+      <td>${badgeHtml}</td>
+    </tr>`;
+  }).join('');
+
+  const allOk = EMPLOYEES.filter(e=>getPsStatus2(e)==='ok').length;
+  const allDanger = EMPLOYEES.filter(e=>getPsStatus2(e)==='danger').length;
+  const avgAll = EMPLOYEES.length ? Math.round(EMPLOYEES.reduce((s,e)=>s+getPsStats2(e).avg,0)/EMPLOYEES.length) : 0;
+
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">${pdfBaseStyle()}
+    <style>table{font-size:10px;} th,td{padding:5px 4px;}</style>
+  </head><body>
+    <div class="doc-header">
+      <div>
+        <h1>${year}년 개인별 교육 이수 현황</h1>
+        <div class="sub">출력일: ${todayFmt()} &nbsp;|&nbsp; 필터: ${filterLabel} &nbsp;|&nbsp; 출력 인원: ${filtered.length}명 / 전체 ${totalEmp}명</div>
+      </div>
+      <div style="font-size:11px;color:#888;">교육 퀴즈 시스템</div>
+    </div>
+    <div class="summary-grid">
+      <div class="s-card"><div class="s-num" style="color:#1565C0;">${totalEmp}명</div><div class="s-label">전체 인원</div></div>
+      <div class="s-card"><div class="s-num" style="color:#2e7d32;">${allOk}명</div><div class="s-label">정상 이수</div></div>
+      <div class="s-card"><div class="s-num" style="color:#c62828;">${allDanger}명</div><div class="s-label">재교육 대상</div></div>
+      <div class="s-card"><div class="s-num" style="color:#1565C0;">${avgAll>0?avgAll+'%':'-'}</div><div class="s-label">평균 정답률</div></div>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:10px;font-size:10px;color:#666;">
+      <span><span class="dot-o">O</span> 이수(합격)</span>
+      <span><span class="dot-t">△</span> 이수(재교육)</span>
+      <span><span class="dot-x">X</span> 미참여</span>
+      <span><span class="dot-n">-</span> 미실시/비대상</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th class="left" style="width:70px;">이름</th>
+        <th class="left" style="width:64px;">부서·직급</th>
+        <th style="width:26px;">1월</th><th style="width:26px;">2월</th><th style="width:26px;">3월</th>
+        <th style="width:26px;">4월</th><th style="width:26px;">5월</th><th style="width:26px;">6월</th>
+        <th style="width:26px;">7월</th><th style="width:26px;">8월</th><th style="width:26px;">9월</th>
+        <th style="width:28px;">10월</th><th style="width:28px;">11월</th><th style="width:28px;">12월</th>
+        <th style="width:44px;">이수율</th>
+        <th style="width:44px;">평균</th>
+        <th style="width:48px;">상태</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="doc-footer" style="margin-top:8px;">※ 재교육 대상: 미참여 2회 이상 또는 정답률 50% 미만</div>
+  </body></html>`;
+  pdfOpen(html);
+}
+
+// ── 개인 상세 PDF ──
+let psCurrentSabun = null;
+
+function printPersonalDetail() {
+  if (!psCurrentSabun) return;
+  const emp = EMPLOYEES.find(e=>e.sabun===psCurrentSabun);
+  if (!emp) return;
+
+  let attended=0,totalScore=0,retrains=0,applicable=0;
+  psArchives.forEach(a=>{
+    const inT=a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun);
+    if(!inT) return;
+    applicable++;
+    const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
+    if(!r) return;
+    attended++; totalScore+=r.score;
+    if(r.score/4<0.5) retrains++;
+  });
+  const rate=applicable?Math.round(attended/applicable*100):0;
+  const avg=attended?Math.round(totalScore/attended/4*100):0;
+  const st=retrains>0||applicable-attended>1?'danger':applicable-attended===1?'warn':'ok';
+  const badgeHtml=st==='ok'?`<span class="badge badge-ok">정상 이수</span>`:st==='warn'?`<span class="badge badge-warn">주의</span>`:`<span class="badge badge-danger">재교육 대상</span>`;
+  const year=parseInt(document.getElementById('ps-year').value);
+
+  let rows='';
+  for(let m=1;m<=12;m++){
+    const a=psArchives.find(x=>x.month===m);
+    if(!a){rows+=`<tr><td>${m}월</td><td class="left" style="color:#aaa;font-style:italic;">미실시</td><td>-</td><td><span class="badge badge-gray">미실시</span></td><td>-</td></tr>`;continue;}
+    const inT=a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun);
+    const dateStr=a.date?a.date.replace(/^\d{4}-/,'').replace('-','/'):'- ';
+    if(!inT){rows+=`<tr><td>${m}월</td><td class="left">${a.title}</td><td>${dateStr}</td><td><span class="badge badge-gray">비대상</span></td><td>-</td></tr>`;continue;}
+    const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
+    if(!r){rows+=`<tr><td>${m}월</td><td class="left">${a.title}</td><td>${dateStr}</td><td><span class="badge badge-danger">미참여</span></td><td style="color:#c62828;">-</td></tr>`;continue;}
+    const pct=Math.round(r.score/4*100);
+    const isR=r.score/4<0.5;
+    rows+=`<tr><td>${m}월</td><td class="left" style="font-weight:600;">${a.title}</td><td>${dateStr}</td><td>${isR?`<span class="badge badge-danger">재교육</span>`:`<span class="badge badge-ok">이수</span>`}</td><td style="font-weight:700;color:${isR?'#c62828':'#2e7d32'};">${pct}%</td></tr>`;
+  }
+
+  const rateColor=rate>=80?'#2e7d32':rate>=60?'#f57f17':'#c62828';
+  const avgColor=avg>=80?'#2e7d32':avg>=60?'#1565C0':avg>0?'#c62828':'#888';
+
+  const html=`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">${pdfBaseStyle()}</head><body>
+    <div class="doc-header">
+      <div>
+        <h1>${year}년 개인 교육 이수 이력</h1>
+        <div class="sub">출력일: ${todayFmt()}</div>
+      </div>
+      <div style="font-size:11px;color:#888;">교육 퀴즈 시스템</div>
+    </div>
+    <div style="background:#f5f5f5;border-radius:8px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:14px;">
+      <div style="width:44px;height:44px;border-radius:50%;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#1565C0;flex-shrink:0;">${emp.name.slice(0,2)}</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;">${emp.name} &nbsp;${badgeHtml}</div>
+        <div style="font-size:12px;color:#666;margin-top:3px;">${emp.sabun} · ${emp.dept} · ${emp.rank}</div>
+      </div>
+    </div>
+    <div class="summary-grid">
+      <div class="s-card"><div class="s-num" style="color:#1565C0;">${attended}<span style="font-size:13px;font-weight:400;color:#888;"> / ${applicable}회</span></div><div class="s-label">이수 교육</div></div>
+      <div class="s-card"><div class="s-num" style="color:${rateColor};">${rate}%</div><div class="s-label">이수율</div></div>
+      <div class="s-card"><div class="s-num" style="color:${avgColor};">${avg>0?avg+'%':'-'}</div><div class="s-label">평균 정답률</div></div>
+      <div class="s-card"><div class="s-num" style="color:${retrains>0?'#c62828':'#2e7d32'};">${retrains}회</div><div class="s-label">재교육 횟수</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:36px;">월</th>
+        <th class="left">교육명</th>
+        <th style="width:56px;">실시일</th>
+        <th style="width:72px;">참여 여부</th>
+        <th style="width:56px;">점수</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="doc-footer" style="margin-top:8px;">※ 재교육 대상: 정답률 50% 미만 또는 미참여</div>
+  </body></html>`;
+  pdfOpen(html);
 }
 
 async function resetConfirm() {
