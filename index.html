@@ -1681,16 +1681,33 @@ function renderArchiveDetail() {
   if (!a) return;
 
   const instructor = getInstructor();
-
-  // 스냅샷 우선, 없으면 현재 EMPLOYEES 사용 (구버전 호환)
   const currentSabuns = new Set(EMPLOYEES.map(e => e.sabun));
-  const snapshot = (a.targetEmpsSnapshot && a.targetEmpsSnapshot.length > 0)
-    ? a.targetEmpsSnapshot.filter(e => e.sabun !== INSTRUCTOR_SABUN)
-    : (a.targetMode === 'select'
-        ? EMPLOYEES.filter(e => (a.targetSabuns||[]).includes(e.sabun) && e.sabun !== INSTRUCTOR_SABUN)
-        : EMPLOYEES.filter(e => e.sabun !== INSTRUCTOR_SABUN));
 
   const responses = (a.responses || []).filter(r => r.sabun !== INSTRUCTOR_SABUN);
+
+  // 스냅샷 우선, 없으면(구버전) 응답자 + select 대상자 기준으로 구성
+  let snapshot;
+  if (a.targetEmpsSnapshot && a.targetEmpsSnapshot.length > 0) {
+    snapshot = a.targetEmpsSnapshot.filter(e => e.sabun !== INSTRUCTOR_SABUN);
+  } else {
+    // 구버전: 응답한 사람 + targetMode select인 경우 targetSabuns 기준
+    const respondedSabuns = new Set(responses.map(r => r.sabun));
+    if (a.targetMode === 'select') {
+      const targetSet = new Set((a.targetSabuns || []).filter(s => s !== INSTRUCTOR_SABUN));
+      snapshot = EMPLOYEES.filter(e => targetSet.has(e.sabun));
+    } else {
+      // 전체대상 구버전: 실제 응답한 사람만 snapshot으로 사용
+      snapshot = EMPLOYEES.filter(e => respondedSabuns.has(e.sabun) && e.sabun !== INSTRUCTOR_SABUN);
+      // 응답했지만 퇴사한 사람도 포함
+      responses.forEach(r => {
+        if (!currentSabuns.has(r.sabun) && r.sabun !== INSTRUCTOR_SABUN) {
+          if (!snapshot.find(e => e.sabun === r.sabun)) {
+            snapshot.push({ sabun: r.sabun, name: r.name, dept: r.dept, rank: r.rank });
+          }
+        }
+      });
+    }
+  }
   const tgt = snapshot.length;
   const attendRate = tgt ? Math.round(responses.length / tgt * 100) : 0;
   const avgScore = responses.length
@@ -1806,14 +1823,28 @@ function printArchiveDetail() {
   const instructor = getInstructor();
   const currentSabuns = new Set(EMPLOYEES.map(e => e.sabun));
 
-  // 스냅샷 우선, 없으면 현재 EMPLOYEES 사용
-  const snapshot = (a.targetEmpsSnapshot && a.targetEmpsSnapshot.length > 0)
-    ? a.targetEmpsSnapshot.filter(e => e.sabun !== INSTRUCTOR_SABUN)
-    : (a.targetMode === 'select'
-        ? EMPLOYEES.filter(e => (a.targetSabuns||[]).includes(e.sabun) && e.sabun !== INSTRUCTOR_SABUN)
-        : EMPLOYEES.filter(e => e.sabun !== INSTRUCTOR_SABUN));
-
   const responses = (a.responses || []).filter(r => r.sabun !== INSTRUCTOR_SABUN);
+
+  // 스냅샷 우선, 없으면(구버전) 응답자 기준으로 구성
+  let snapshot;
+  if (a.targetEmpsSnapshot && a.targetEmpsSnapshot.length > 0) {
+    snapshot = a.targetEmpsSnapshot.filter(e => e.sabun !== INSTRUCTOR_SABUN);
+  } else {
+    const respondedSabuns = new Set(responses.map(r => r.sabun));
+    if (a.targetMode === 'select') {
+      const targetSet = new Set((a.targetSabuns || []).filter(s => s !== INSTRUCTOR_SABUN));
+      snapshot = EMPLOYEES.filter(e => targetSet.has(e.sabun));
+    } else {
+      snapshot = EMPLOYEES.filter(e => respondedSabuns.has(e.sabun) && e.sabun !== INSTRUCTOR_SABUN);
+      responses.forEach(r => {
+        if (!currentSabuns.has(r.sabun) && r.sabun !== INSTRUCTOR_SABUN) {
+          if (!snapshot.find(e => e.sabun === r.sabun)) {
+            snapshot.push({ sabun: r.sabun, name: r.name, dept: r.dept, rank: r.rank });
+          }
+        }
+      });
+    }
+  }
   const tgt = snapshot.length;
   const attendRate = tgt ? Math.round(responses.length / tgt * 100) : 0;
   const avgScore = responses.length
@@ -1968,12 +1999,7 @@ async function renderPersonalList() {
   function getPsStatus(emp) {
     let attended = 0, retrains = 0, missed = 0;
     psArchives.forEach(a => {
-      // 스냅샷 우선, 없으면 targetSabuns/targetMode로 판단
-      const snap = a.targetEmpsSnapshot;
-      const inSnapshot = snap && snap.length > 0
-        ? snap.some(s => s.sabun === emp.sabun)
-        : (a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun));
-      if (!inSnapshot) return; // 입사 전 or 퇴사 후 → 비대상
+      if (!isInArchiveTarget(a, emp.sabun)) return;
       const r = (a.responses || []).find(x => x.sabun === emp.sabun);
       if (!r) { missed++; return; }
       attended++;
@@ -1987,11 +2013,7 @@ async function renderPersonalList() {
   function getPsStats(emp) {
     let attended = 0, totalScore = 0, retrains = 0, applicable = 0;
     psArchives.forEach(a => {
-      const snap = a.targetEmpsSnapshot;
-      const inSnapshot = snap && snap.length > 0
-        ? snap.some(s => s.sabun === emp.sabun)
-        : (a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun));
-      if (!inSnapshot) return;
+      if (!isInArchiveTarget(a, emp.sabun)) return;
       applicable++;
       const r = (a.responses || []).find(x => x.sabun === emp.sabun);
       if (!r) return;
@@ -2007,12 +2029,7 @@ async function renderPersonalList() {
   function dotHtml(emp, month) {
     const a = psArchives.find(x => x.month === month);
     if (!a) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);font-size:9px;line-height:18px;text-align:center;color:var(--text-muted);">-</span>`;
-    // 스냅샷에 있는지 확인 (입사 전 / 퇴사 후 = -)
-    const snap = a.targetEmpsSnapshot;
-    const inSnapshot = snap && snap.length > 0
-      ? snap.some(s => s.sabun === emp.sabun)
-      : (a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun));
-    if (!inSnapshot) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);font-size:9px;line-height:18px;text-align:center;color:var(--text-muted);">-</span>`;
+    if (!isInArchiveTarget(a, emp.sabun)) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);font-size:9px;line-height:18px;text-align:center;color:var(--text-muted);">-</span>`;
     const r = (a.responses || []).find(x => x.sabun === emp.sabun);
     if (!r) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(239,68,68,.12);font-size:10px;font-weight:700;line-height:18px;text-align:center;color:var(--danger);">X</span>`;
     if (r.score / 4 < 0.5) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(245,158,11,.12);font-size:10px;font-weight:700;line-height:18px;text-align:center;color:var(--warning);">△</span>`;
@@ -2096,11 +2113,7 @@ function psShowDetail(sabun) {
 
   let attended = 0, totalScore = 0, retrains = 0, applicable = 0;
   psArchives.forEach(a => {
-    const snap = a.targetEmpsSnapshot;
-    const inSnapshot = snap && snap.length > 0
-      ? snap.some(s => s.sabun === sabun)
-      : (a.targetMode !== 'select' || (a.targetSabuns || []).includes(sabun));
-    if (!inSnapshot) return;
+    if (!isInArchiveTarget(a, sabun)) return;
     applicable++;
     const r = (a.responses || []).find(x => x.sabun === sabun);
     if (!r) return;
@@ -2131,11 +2144,7 @@ function psShowDetail(sabun) {
       continue;
     }
     // 스냅샷 기반으로 비대상 판단 (입사 전 / 퇴사 후)
-    const snap = a.targetEmpsSnapshot;
-    const inSnapshot = snap && snap.length > 0
-      ? snap.some(s => s.sabun === sabun)
-      : (a.targetMode !== 'select' || (a.targetSabuns || []).includes(sabun));
-    if (!inSnapshot) {
+    if (!isInArchiveTarget(a, sabun)) {
       rows += `<tr>
         <td style="text-align:center;font-size:12px;color:var(--text-muted);">${m}월</td>
         <td style="font-size:12px;color:var(--text-muted);">${a.title}</td>
@@ -2392,9 +2401,7 @@ function printPersonalList() {
   function getPsStatus2(emp) {
     let retrains=0, missed=0;
     psArchives.forEach(a => {
-      const snap=a.targetEmpsSnapshot;
-      const inSnapshot=snap&&snap.length>0?snap.some(s=>s.sabun===emp.sabun):(a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun));
-      if (!inSnapshot) return;
+      if (!isInArchiveTarget(a, emp.sabun)) return;
       const r = (a.responses||[]).find(x=>x.sabun===emp.sabun);
       if (!r) { missed++; return; }
       if (r.score/4<0.5) retrains++;
@@ -2406,9 +2413,7 @@ function printPersonalList() {
   function getPsStats2(emp) {
     let attended=0,totalScore=0,retrains=0,applicable=0;
     psArchives.forEach(a => {
-      const snap=a.targetEmpsSnapshot;
-      const inSnapshot=snap&&snap.length>0?snap.some(s=>s.sabun===emp.sabun):(a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun));
-      if (!inSnapshot) return;
+      if (!isInArchiveTarget(a, emp.sabun)) return;
       applicable++;
       const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
       if (!r) return;
@@ -2422,9 +2427,7 @@ function printPersonalList() {
   function dotStr(emp, month) {
     const a = psArchives.find(x=>x.month===month);
     if (!a) return `<span class="dot-n">-</span>`;
-    const snap=a.targetEmpsSnapshot;
-    const inSnapshot=snap&&snap.length>0?snap.some(s=>s.sabun===emp.sabun):(a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun));
-    if (!inSnapshot) return `<span class="dot-n">-</span>`;
+    if (!isInArchiveTarget(a, emp.sabun)) return `<span class="dot-n">-</span>`;
     const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
     if (!r) return `<span class="dot-x">X</span>`;
     if(r.score/4<0.5) return `<span class="dot-t">△</span>`;
@@ -2520,11 +2523,7 @@ function printPersonalDetail() {
 
   let attended=0,totalScore=0,retrains=0,applicable=0;
   psArchives.forEach(a=>{
-    const snap=a.targetEmpsSnapshot;
-    const inSnapshot=snap&&snap.length>0
-      ?snap.some(s=>s.sabun===emp.sabun)
-      :(a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun));
-    if(!inSnapshot) return;
+    if(!isInArchiveTarget(a,emp.sabun)) return;
     applicable++;
     const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
     if(!r) return;
@@ -2541,12 +2540,8 @@ function printPersonalDetail() {
   for(let m=1;m<=12;m++){
     const a=psArchives.find(x=>x.month===m);
     if(!a){rows+=`<tr><td>${m}월</td><td class="left" style="color:#aaa;font-style:italic;">미실시</td><td>-</td><td><span class="badge badge-gray">미실시</span></td><td>-</td></tr>`;continue;}
-    const snap=a.targetEmpsSnapshot;
-    const inSnapshot=snap&&snap.length>0
-      ?snap.some(s=>s.sabun===emp.sabun)
-      :(a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun));
     const dateStr=a.date?a.date.replace(/^\d{4}-/,'').replace('-','/'):'- ';
-    if(!inSnapshot){rows+=`<tr><td>${m}월</td><td class="left" style="color:#aaa;">${a.title}</td><td style="color:#aaa;">${dateStr}</td><td><span class="badge badge-gray">-</span></td><td>-</td></tr>`;continue;}
+    if(!isInArchiveTarget(a,emp.sabun)){rows+=`<tr><td>${m}월</td><td class="left" style="color:#aaa;">${a.title}</td><td style="color:#aaa;">${dateStr}</td><td><span class="badge badge-gray">-</span></td><td>-</td></tr>`;continue;}
     const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
     if(!r){rows+=`<tr><td>${m}월</td><td class="left">${a.title}</td><td>${dateStr}</td><td><span class="badge badge-danger">미참여</span></td><td style="color:#c62828;">-</td></tr>`;continue;}
     const pct=Math.round(r.score/4*100);
@@ -2593,7 +2588,22 @@ function printPersonalDetail() {
   pdfOpen(html);
 }
 
-// ── 이번 달 교육 마감 ──
+// 스냅샷 기반 대상 여부 판단
+// 스냅샷 있으면 → 스냅샷에 있는지
+// 스냅샷 없으면(구버전) → 실제 응답한 사람만 대상으로 간주 (입사전/퇴사후 오판 방지)
+function isInArchiveTarget(a, sabun) {
+  const snap = a.targetEmpsSnapshot;
+  if (snap && snap.length > 0) {
+    return snap.some(s => s.sabun === sabun);
+  }
+  // 구버전: 응답자 목록에 있으면 대상, 없으면 비대상(-)으로 처리
+  const responded = (a.responses || []).some(r => r.sabun === sabun);
+  if (responded) return true;
+  // targetMode select인 경우 targetSabuns 확인
+  if (a.targetMode === 'select') return (a.targetSabuns || []).includes(sabun);
+  // 전체대상이지만 응답 없음 → 당시 재직 여부 불명 → 비대상으로 처리
+  return false;
+}
 async function closeMonthlyEdu() {
   const msgEl = document.getElementById('close-month-msg');
   if (!state.quiz) { msgEl.style.color='var(--danger)'; msgEl.textContent='등록된 교육이 없습니다.'; return; }
