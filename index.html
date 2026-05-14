@@ -543,11 +543,11 @@
   <!-- 월별 표 -->
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="overflow-x:auto;">
-      <table class="respondent-table" id="annual-table" style="min-width:480px;">
+      <table class="respondent-table" id="annual-table" style="min-width:480px;table-layout:fixed;width:100%;">
         <thead>
           <tr style="background:var(--surface2);">
             <th style="width:36px;text-align:center;">월</th>
-            <th>교육명</th>
+            <th style="width:auto;">교육명</th>
             <th style="width:72px;text-align:center;">실시일</th>
             <th style="width:44px;text-align:center;">대상</th>
             <th style="width:44px;text-align:center;">참여</th>
@@ -1620,7 +1620,7 @@ async function renderAnnualStats() {
     const dateStr = a.date ? a.date.replace(/^\d{4}-/, '').replace('-', '/') : '-';
     html += `<tr>
       <td style="text-align:center;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);font-size:11px;font-weight:600;line-height:24px;text-align:center;color:var(--text-muted);">${m}</span></td>
-      <td style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">${a.title}</td>
+      <td style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.title}</td>
       <td style="text-align:center;font-size:12px;color:var(--text-muted);">${dateStr}</td>
       <td style="text-align:center;">${tgt}</td>
       <td style="text-align:center;">${a.attendCount}</td>
@@ -1968,8 +1968,12 @@ async function renderPersonalList() {
   function getPsStatus(emp) {
     let attended = 0, retrains = 0, missed = 0;
     psArchives.forEach(a => {
-      const inTarget = a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun);
-      if (!inTarget) return;
+      // 스냅샷 우선, 없으면 targetSabuns/targetMode로 판단
+      const snap = a.targetEmpsSnapshot;
+      const inSnapshot = snap && snap.length > 0
+        ? snap.some(s => s.sabun === emp.sabun)
+        : (a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun));
+      if (!inSnapshot) return; // 입사 전 or 퇴사 후 → 비대상
       const r = (a.responses || []).find(x => x.sabun === emp.sabun);
       if (!r) { missed++; return; }
       attended++;
@@ -1983,8 +1987,11 @@ async function renderPersonalList() {
   function getPsStats(emp) {
     let attended = 0, totalScore = 0, retrains = 0, applicable = 0;
     psArchives.forEach(a => {
-      const inTarget = a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun);
-      if (!inTarget) return;
+      const snap = a.targetEmpsSnapshot;
+      const inSnapshot = snap && snap.length > 0
+        ? snap.some(s => s.sabun === emp.sabun)
+        : (a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun));
+      if (!inSnapshot) return;
       applicable++;
       const r = (a.responses || []).find(x => x.sabun === emp.sabun);
       if (!r) return;
@@ -2000,8 +2007,12 @@ async function renderPersonalList() {
   function dotHtml(emp, month) {
     const a = psArchives.find(x => x.month === month);
     if (!a) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);font-size:9px;line-height:18px;text-align:center;color:var(--text-muted);">-</span>`;
-    const inTarget = a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun);
-    if (!inTarget) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);font-size:9px;line-height:18px;text-align:center;color:var(--text-muted);">-</span>`;
+    // 스냅샷에 있는지 확인 (입사 전 / 퇴사 후 = -)
+    const snap = a.targetEmpsSnapshot;
+    const inSnapshot = snap && snap.length > 0
+      ? snap.some(s => s.sabun === emp.sabun)
+      : (a.targetMode !== 'select' || (a.targetSabuns || []).includes(emp.sabun));
+    if (!inSnapshot) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);font-size:9px;line-height:18px;text-align:center;color:var(--text-muted);">-</span>`;
     const r = (a.responses || []).find(x => x.sabun === emp.sabun);
     if (!r) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(239,68,68,.12);font-size:10px;font-weight:700;line-height:18px;text-align:center;color:var(--danger);">X</span>`;
     if (r.score / 4 < 0.5) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(245,158,11,.12);font-size:10px;font-weight:700;line-height:18px;text-align:center;color:var(--warning);">△</span>`;
@@ -2085,8 +2096,11 @@ function psShowDetail(sabun) {
 
   let attended = 0, totalScore = 0, retrains = 0, applicable = 0;
   psArchives.forEach(a => {
-    const inTarget = a.targetMode !== 'select' || (a.targetSabuns || []).includes(sabun);
-    if (!inTarget) return;
+    const snap = a.targetEmpsSnapshot;
+    const inSnapshot = snap && snap.length > 0
+      ? snap.some(s => s.sabun === sabun)
+      : (a.targetMode !== 'select' || (a.targetSabuns || []).includes(sabun));
+    if (!inSnapshot) return;
     applicable++;
     const r = (a.responses || []).find(x => x.sabun === sabun);
     if (!r) return;
@@ -2116,13 +2130,17 @@ function psShowDetail(sabun) {
       </tr>`;
       continue;
     }
-    const inTarget = a.targetMode !== 'select' || (a.targetSabuns || []).includes(sabun);
-    if (!inTarget) {
+    // 스냅샷 기반으로 비대상 판단 (입사 전 / 퇴사 후)
+    const snap = a.targetEmpsSnapshot;
+    const inSnapshot = snap && snap.length > 0
+      ? snap.some(s => s.sabun === sabun)
+      : (a.targetMode !== 'select' || (a.targetSabuns || []).includes(sabun));
+    if (!inSnapshot) {
       rows += `<tr>
         <td style="text-align:center;font-size:12px;color:var(--text-muted);">${m}월</td>
         <td style="font-size:12px;color:var(--text-muted);">${a.title}</td>
         <td style="text-align:center;font-size:12px;color:var(--text-muted);">${a.date ? a.date.replace(/^\d{4}-/,'').replace('-','/') : '-'}</td>
-        <td style="text-align:center;"><span class="badge" style="background:var(--surface2);color:var(--text-muted);">비대상</span></td>
+        <td style="text-align:center;"><span class="badge" style="background:var(--surface2);color:var(--text-muted);">-</span></td>
         <td style="text-align:center;color:var(--text-muted);font-size:12px;">-</td>
       </tr>`;
       continue;
@@ -2374,8 +2392,9 @@ function printPersonalList() {
   function getPsStatus2(emp) {
     let retrains=0, missed=0;
     psArchives.forEach(a => {
-      const inT = a.targetMode!=='select' || (a.targetSabuns||[]).includes(emp.sabun);
-      if (!inT) return;
+      const snap=a.targetEmpsSnapshot;
+      const inSnapshot=snap&&snap.length>0?snap.some(s=>s.sabun===emp.sabun):(a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun));
+      if (!inSnapshot) return;
       const r = (a.responses||[]).find(x=>x.sabun===emp.sabun);
       if (!r) { missed++; return; }
       if (r.score/4<0.5) retrains++;
@@ -2387,8 +2406,9 @@ function printPersonalList() {
   function getPsStats2(emp) {
     let attended=0,totalScore=0,retrains=0,applicable=0;
     psArchives.forEach(a => {
-      const inT = a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun);
-      if (!inT) return;
+      const snap=a.targetEmpsSnapshot;
+      const inSnapshot=snap&&snap.length>0?snap.some(s=>s.sabun===emp.sabun):(a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun));
+      if (!inSnapshot) return;
       applicable++;
       const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
       if (!r) return;
@@ -2402,8 +2422,9 @@ function printPersonalList() {
   function dotStr(emp, month) {
     const a = psArchives.find(x=>x.month===month);
     if (!a) return `<span class="dot-n">-</span>`;
-    const inT = a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun);
-    if (!inT) return `<span class="dot-n">-</span>`;
+    const snap=a.targetEmpsSnapshot;
+    const inSnapshot=snap&&snap.length>0?snap.some(s=>s.sabun===emp.sabun):(a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun));
+    if (!inSnapshot) return `<span class="dot-n">-</span>`;
     const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
     if (!r) return `<span class="dot-x">X</span>`;
     if(r.score/4<0.5) return `<span class="dot-t">△</span>`;
@@ -2499,8 +2520,11 @@ function printPersonalDetail() {
 
   let attended=0,totalScore=0,retrains=0,applicable=0;
   psArchives.forEach(a=>{
-    const inT=a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun);
-    if(!inT) return;
+    const snap=a.targetEmpsSnapshot;
+    const inSnapshot=snap&&snap.length>0
+      ?snap.some(s=>s.sabun===emp.sabun)
+      :(a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun));
+    if(!inSnapshot) return;
     applicable++;
     const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
     if(!r) return;
@@ -2517,9 +2541,12 @@ function printPersonalDetail() {
   for(let m=1;m<=12;m++){
     const a=psArchives.find(x=>x.month===m);
     if(!a){rows+=`<tr><td>${m}월</td><td class="left" style="color:#aaa;font-style:italic;">미실시</td><td>-</td><td><span class="badge badge-gray">미실시</span></td><td>-</td></tr>`;continue;}
-    const inT=a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun);
+    const snap=a.targetEmpsSnapshot;
+    const inSnapshot=snap&&snap.length>0
+      ?snap.some(s=>s.sabun===emp.sabun)
+      :(a.targetMode!=='select'||(a.targetSabuns||[]).includes(emp.sabun));
     const dateStr=a.date?a.date.replace(/^\d{4}-/,'').replace('-','/'):'- ';
-    if(!inT){rows+=`<tr><td>${m}월</td><td class="left">${a.title}</td><td>${dateStr}</td><td><span class="badge badge-gray">비대상</span></td><td>-</td></tr>`;continue;}
+    if(!inSnapshot){rows+=`<tr><td>${m}월</td><td class="left" style="color:#aaa;">${a.title}</td><td style="color:#aaa;">${dateStr}</td><td><span class="badge badge-gray">-</span></td><td>-</td></tr>`;continue;}
     const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
     if(!r){rows+=`<tr><td>${m}월</td><td class="left">${a.title}</td><td>${dateStr}</td><td><span class="badge badge-danger">미참여</span></td><td style="color:#c62828;">-</td></tr>`;continue;}
     const pct=Math.round(r.score/4*100);
