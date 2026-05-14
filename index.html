@@ -1399,23 +1399,48 @@ function printReport() {
     const missing = !r;
     const isR = r && r.score/TOTAL_Q < PASS_RATE;
     const bg = missing ? '#fafafa' : isR ? '#fffde7' : '#fff';
-    const scoreText = missing ? '-' : `${r.score}/${TOTAL_Q}`;
-    const scoreColor = isR ? '#c62828' : '#333';
-    const badge = missing
-      ? `<span style="background:#f5f5f5;color:#aaa;border-radius:20px;padding:2px 6px;font-size:9px;font-weight:600;">미응답</span>`
-      : isR
-        ? `<span style="background:#ffebee;color:#c62828;border-radius:20px;padding:2px 6px;font-size:9px;font-weight:600;">재교육</span>`
-        : `<span style="background:#e8f5e9;color:#2e7d32;border-radius:20px;padding:2px 6px;font-size:9px;font-weight:600;">통과</span>`;
+
+    // 오답 문항 분석
+    let wrongHtml = '';
+    if (r && r.answers) {
+      quiz.questions.forEach((q, qi) => {
+        const userAns = r.answers[qi];
+        const correct = q.answer;
+        if (userAns !== correct) {
+          const qNum = qi + 1;
+          const userStr = q.type === 'ox'
+            ? (userAns ?? '미선택')
+            : (userAns !== undefined && userAns !== null ? OPT_LABELS[userAns] : '미선택');
+          const correctStr = q.type === 'ox' ? correct : OPT_LABELS[correct];
+          wrongHtml += `<div style="font-size:10px;color:#c62828;margin-top:3px;line-height:1.5;">
+            ✗ <b>${qNum}번</b>: ${userStr} → <span style="color:#1565C0;font-weight:700;">${correctStr}</span>
+          </div>`;
+        }
+      });
+    }
+
+    const resultBlock = missing
+      ? `<div style="font-size:10px;font-weight:700;color:#aaa;">미응답</div>`
+      : `<div style="margin-bottom:5px;">
+           <span style="background:${isR?'#ffebee':'#e8f5e9'};color:${isR?'#c62828':'#2e7d32'};border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;">${isR?'재교육':'통과'}</span>
+         </div>
+         <div style="font-size:10px;color:#555;font-weight:600;margin-bottom:2px;">${r.score}/${TOTAL_Q}점 (${Math.round(r.score/TOTAL_Q*100)}%)</div>
+         ${wrongHtml || '<div style="font-size:10px;color:#2e7d32;margin-top:3px;">✓ 전문항 정답</div>'}`;
+
     const sig = (r && r.signature)
-      ? `<img src="${r.signature}" style="height:28px;width:80px;object-fit:contain;border:0.5px solid #ddd;border-radius:3px;background:#fff;display:block;margin:0 auto;">`
-      : `<div style="height:28px;width:80px;border:0.5px solid #eee;border-radius:3px;background:#fafafa;margin:0 auto;"></div>`;
-    return `<tr style="border-bottom:0.5px solid #e8e8e8;background:${bg};">
-      <td style="padding:4px 6px;color:${missing?'#aaa':'#333'};">${emp.sabun}</td>
-      <td style="padding:4px 6px;color:${missing?'#aaa':'#111'};font-weight:${missing?'400':'500'};">${emp.name}</td>
-      <td style="padding:4px 6px;color:#666;">${emp.dept}</td>
-      <td style="padding:4px 6px;text-align:center;font-weight:600;color:${scoreColor};">${scoreText}</td>
-      <td style="padding:4px 6px;text-align:center;">${badge}</td>
-      <td style="padding:4px 6px;text-align:center;">${sig}</td>
+      ? `<img src="${r.signature}" style="height:112px;width:320px;object-fit:contain;border:1px solid #ddd;border-radius:4px;background:#fff;display:block;">`
+      : `<div style="height:112px;width:320px;border:1px dashed #ccc;border-radius:4px;background:#fafafa;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:#bbb;">미서명</span></div>`;
+
+    return `<tr style="background:${bg};">
+      <td style="padding:6px 8px;color:${missing?'#aaa':'#333'};font-size:11px;">${emp.sabun}</td>
+      <td style="padding:6px 8px;color:${missing?'#aaa':'#111'};font-weight:${missing?'400':'600'};font-size:11px;">${emp.name}</td>
+      <td style="padding:6px 8px;color:#666;font-size:11px;">${emp.dept}</td>
+      <td style="padding:8px;">
+        <div style="display:flex;align-items:flex-start;gap:14px;">
+          ${sig}
+          <div style="padding-top:4px;min-width:100px;">${resultBlock}</div>
+        </div>
+      </td>
     </tr>`;
   }).join('');
 
@@ -1424,19 +1449,22 @@ function printReport() {
 
   const printHtml = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
   <style>
-    body{font-family:'Noto Sans KR',sans-serif;color:#111;background:#fff;margin:0;padding:20px 30px;font-size:12px;}
-    h2{font-size:16px;font-weight:700;margin:0;}
-    .header{border-bottom:2px solid #222;padding-bottom:10px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-end;}
-    .sub{font-size:11px;color:#666;margin-top:3px;}
-    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;}
-    .scard{background:#f5f5f5;border-radius:6px;padding:10px;text-align:center;}
-    .scard-num{font-size:18px;font-weight:700;}
-    .scard-label{font-size:10px;color:#555;margin-top:2px;}
-    .section-title{font-size:12px;font-weight:700;color:#333;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #ddd;}
-    table{width:100%;border-collapse:collapse;font-size:11px;}
-    th{background:#eee;padding:6px 8px;text-align:left;font-weight:600;color:#555;}
-    .chips{display:flex;flex-wrap:wrap;gap:4px;}
-    @media print{body{padding:10px 20px;} @page{margin:10mm;}}
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+    * { box-sizing: border-box; }
+    body { font-family:'Noto Sans KR',sans-serif; color:#111; background:#fff; margin:0; padding:20px 28px; font-size:12px; }
+    h2 { font-size:16px; font-weight:700; margin:0; }
+    .header { border-bottom:2px solid #222; padding-bottom:10px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:flex-end; }
+    .sub { font-size:11px; color:#666; margin-top:3px; }
+    .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:16px; }
+    .scard { background:#f5f5f5; border-radius:6px; padding:10px; text-align:center; }
+    .scard-num { font-size:18px; font-weight:700; }
+    .scard-label { font-size:10px; color:#555; margin-top:2px; }
+    .section-title { font-size:12px; font-weight:700; color:#333; margin:14px 0 8px; padding-bottom:4px; border-bottom:1px solid #ddd; }
+    table { width:100%; border-collapse:collapse; font-size:11px; }
+    th { background:#eee; padding:7px 8px; text-align:left; font-weight:600; color:#555; border:0.5px solid #ddd; }
+    td { border:0.5px solid #e8e8e8; vertical-align:middle; }
+    .chips { display:flex; flex-wrap:wrap; gap:4px; }
+    @media print { body { padding:12px 20px; } @page { margin:10mm; size:A4 portrait; } }
   </style></head><body>
   <div class="header">
     <div>
@@ -1447,45 +1475,57 @@ function printReport() {
   </div>
 
   <div class="section-title" style="color:#1565C0;">출제 문제 및 정답</div>
-  <table style="margin-bottom:14px;font-size:11px;border-collapse:collapse;width:100%;">
+  <table style="margin-bottom:14px;">
     <thead><tr>
-      <th style="background:#1565C0;color:#fff;padding:6px 8px;width:30px;">번호</th>
-      <th style="background:#1565C0;color:#fff;padding:6px 8px;">문제</th>
-      <th style="background:#1565C0;color:#fff;padding:6px 8px;width:200px;">선택지</th>
-      <th style="background:#1565C0;color:#fff;padding:6px 8px;width:60px;text-align:center;">정답</th>
+      <th style="background:#1565C0;color:#fff;width:28px;text-align:center;">번호</th>
+      <th style="background:#1565C0;color:#fff;">문제</th>
+      <th style="background:#1565C0;color:#fff;width:200px;">선택지</th>
+      <th style="background:#1565C0;color:#fff;width:80px;text-align:center;">정답</th>
     </tr></thead>
     <tbody>
       ${quiz.questions.map((q, i) => {
-        const answerText = q.type === 'ox'
-          ? q.answer
-          : `${['①','②','③','④'][q.answer]} ${q.options[q.answer]}`;
+        const answerText = q.type === 'ox' ? q.answer : `${OPT_LABELS[q.answer]} ${q.options[q.answer]}`;
         const choicesHtml = q.type === 'ox'
-          ? 'O  /  X'
-          : q.options.map((opt, oi) => `<span style="${oi===q.answer?'font-weight:700;color:#1565C0;':''}">${['①','②','③','④'][oi]} ${opt}</span>`).join('<br>');
+          ? 'O &nbsp;/&nbsp; X'
+          : q.options.map((opt, oi) =>
+              `<div style="${oi===q.answer?'font-weight:700;color:#1565C0;':''}">${OPT_LABELS[oi]} ${opt}</div>`
+            ).join('');
         return `<tr style="background:${i%2===0?'#f8f9fa':'#fff'};">
-          <td style="padding:6px 8px;text-align:center;font-weight:700;color:#333;">${i+1}</td>
-          <td style="padding:6px 8px;color:#333;">${q.text}</td>
-          <td style="padding:6px 8px;color:#555;font-size:10.5px;line-height:1.7;">${choicesHtml}</td>
+          <td style="padding:6px 8px;text-align:center;font-weight:700;">${i+1}</td>
+          <td style="padding:6px 8px;">${q.text}</td>
+          <td style="padding:6px 8px;line-height:1.7;">${choicesHtml}</td>
           <td style="padding:6px 8px;text-align:center;font-weight:700;color:#1565C0;">${answerText}</td>
         </tr>`;
       }).join('')}
     </tbody>
   </table>
+
   <div class="grid">
     <div class="scard"><div class="scard-num" style="color:#1a73e8;">${pct}%</div><div class="scard-label">응답률</div></div>
     <div class="scard"><div class="scard-num" style="color:#2e7d32;">${done}/${total}</div><div class="scard-label">참여 인원</div></div>
     <div class="scard"><div class="scard-num" style="color:#1a73e8;">${avgScore}%</div><div class="scard-label">평균 정답률</div></div>
     <div class="scard"><div class="scard-num" style="color:#c62828;">${retrainList.length}명</div><div class="scard-label">재교육 대상</div></div>
   </div>
+
   <div class="section-title" style="color:#c62828;">⚠ 재교육 대상자 (${retrainList.length}명 · 정답률 50% 미만)</div>
-  <div class="chips">${retrainList.length ? retrainChips : '<span style="color:#2e7d32;font-size:11px;">재교육 대상자 없음</span>'}</div>
+  <div class="chips" style="margin-bottom:10px;">${retrainList.length ? retrainChips : '<span style="color:#2e7d32;font-size:11px;">재교육 대상자 없음</span>'}</div>
+
   <div class="section-title" style="color:#f57f17;">미응답자 (${absentees.length}명)</div>
-  <div class="chips">${absentees.length ? absentChips : '<span style="color:#2e7d32;font-size:11px;">전원 참여 완료</span>'}</div>
+  <div class="chips" style="margin-bottom:10px;">${absentees.length ? absentChips : '<span style="color:#2e7d32;font-size:11px;">전원 참여 완료</span>'}</div>
+
   <div class="section-title">개인별 점수 및 서명</div>
-  <table><thead><tr><th style="width:44px;">사번</th><th style="width:54px;">이름</th><th style="width:50px;">부서</th><th style="width:36px;text-align:center;">점수</th><th style="width:44px;text-align:center;">결과</th><th style="text-align:center;">서명</th></tr></thead><tbody>${allRows}</tbody></table>
+  <table>
+    <thead><tr>
+      <th style="width:48px;">사번</th>
+      <th style="width:60px;">이름</th>
+      <th style="width:56px;">부서</th>
+      <th>서명 &nbsp;·&nbsp; 결과 &nbsp;·&nbsp; 오답 내역</th>
+    </tr></thead>
+    <tbody>${allRows}</tbody>
+  </table>
   </body></html>`;
 
-  const w = window.open('','_blank','width=800,height=900');
+  const w = window.open('','_blank','width=900,height=1000');
   w.document.write(printHtml);
   w.document.close();
   w.onload = () => { w.focus(); w.print(); };
