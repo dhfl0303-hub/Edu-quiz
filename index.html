@@ -2668,6 +2668,18 @@ function participantLogin() {
   const emp = EMPLOYEES.find(e => e.sabun===sabun && e.name===name);
   if (!emp) { errEl.textContent = '사번 또는 이름이 일치하지 않습니다.'; return; }
 
+  // 교육 날짜 체크 - 예정일 당일 00:00 이전 접근 차단
+  if (state.quiz && state.quiz.date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const eduDate = new Date(state.quiz.date);
+    eduDate.setHours(0, 0, 0, 0);
+    if (today < eduDate) {
+      errEl.textContent = `교육 시작 전입니다. 교육 예정일(${fmtDate(state.quiz.date)})에 참여해 주세요.`;
+      return;
+    }
+  }
+
   // 강사 체크
   if (sabun === INSTRUCTOR_SABUN) {
     errEl.textContent = '강사로 등록된 사용자는 참여할 수 없습니다.'; return;
