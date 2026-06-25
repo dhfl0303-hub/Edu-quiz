@@ -470,6 +470,7 @@
     </div>
   </div>
 
+  <button class="btn" onclick="resetQuiz()" style="background:var(--surface2);border:1px solid var(--danger);color:var(--danger);margin-bottom:4px;">🗑️ 문제 초기화</button>
   <button class="btn btn-success" onclick="saveQuiz()">저장 완료</button>
   <div id="save-msg" style="text-align:center;font-size:13px;"></div>
 </div>
@@ -1194,6 +1195,38 @@ function selectOX(val) {
   document.getElementById('ox-o').classList.toggle('selected', val==='O');
   document.getElementById('ox-x').classList.toggle('selected', val==='X');
   state.q4Answer = val;
+}
+
+async function resetQuiz() {
+  if (!confirm('현재 등록된 문제를 초기화하시겠습니까?\n※ Firebase 저장 데이터도 삭제됩니다.')) return;
+  showLoading(true, '초기화 중...');
+  try {
+    await window.fbSaveQuiz(null);
+    state.quiz = null;
+    // 입력 필드 전체 초기화
+    document.getElementById('edu-title').value = '';
+    document.getElementById('edu-date').value = todayStr();
+    ['q1','q2','q3'].forEach(q => {
+      document.getElementById(`${q}-text`).value = '';
+      document.getElementById(`${q}-explanation`).value = '';
+      for (let i = 0; i < 4; i++) {
+        const el = document.getElementById(`${q}-opt${i}`);
+        if (el) el.value = '';
+      }
+      document.querySelectorAll(`#${q}-ans-row .ans-btn`).forEach(b => b.classList.remove('selected'));
+    });
+    document.getElementById('q4-text').value = '';
+    document.getElementById('q4-explanation').value = '';
+    document.getElementById('ox-o').classList.remove('selected');
+    document.getElementById('ox-x').classList.remove('selected');
+    state.q1Answer = null; state.q2Answer = null; state.q3Answer = null; state.q4Answer = null;
+    setTargetMode('all');
+    showLoading(false);
+    showSaveMsg('초기화 완료! 새 문제를 등록해 주세요.', true);
+  } catch(e) {
+    showLoading(false);
+    showSaveMsg('초기화 실패: ' + e.message, false);
+  }
 }
 
 async function saveQuiz() {
