@@ -24,6 +24,12 @@
   }
 
 
+  #sign-canvas {
+    color-scheme: only light;
+    forced-color-adjust: none;
+    background-color: #fff !important;
+  }
+
   .explanation-box {
     margin-top: 16px;
     border-radius: var(--radius-sm);
@@ -255,6 +261,31 @@
     .card { padding: 18px; }
     .stat-grid { grid-template-columns: 1fr 1fr; }
   }
+  /* PC 관리자 메뉴: 모바일의 기존 한 열 배치는 유지 */
+  @media screen and (min-width: 960px) {
+    #screen-admin-menu {
+      max-width: 1120px;
+      padding: 36px 32px 60px;
+      gap: 28px;
+    }
+    #screen-admin-menu .home-btns {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      align-items: stretch;
+    }
+    #screen-admin-menu .home-btn {
+      min-width: 0;
+      min-height: 120px;
+      padding: 24px 20px;
+    }
+    #screen-admin-menu .home-btn-text {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    #screen-admin-menu .home-btn-text h3 { font-size: 17px; }
+    #screen-admin-menu .home-btn-text p { font-size: 13px; line-height: 1.6; }
+  }
 </style>
 </head>
 <body>
@@ -285,6 +316,17 @@
   </div>
 </div>
 
+<div class="screen" id="screen-history">
+  <div class="nav-back" onclick="go('screen-admin-menu')">← 관리자 메뉴</div>
+  <div class="logo"><div class="logo-badge">HISTORY</div><h1>지난 교육 내역</h1><p>교육 내용과 참여 기록을 회차별로 확인하세요</p></div>
+  <input type="text" id="history-search" placeholder="교육명 또는 날짜 검색 (예: 2026-08)" oninput="renderHistory()">
+  <button class="btn btn-outline" onclick="goHistory()">새로고침</button>
+  <div id="history-list"></div>
+</div>
+<div class="screen" id="screen-history-detail">
+  <div class="nav-back" onclick="go('screen-history')">← 지난 교육 내역</div>
+  <div id="history-detail-content"></div>
+</div>
 <!-- ══════════ 관리자 로그인 ══════════ -->
 <div class="screen" id="screen-admin-login">
   <div class="nav-back" onclick="go('screen-home')">← 뒤로</div>
@@ -347,6 +389,10 @@
     <div class="home-btn" onclick="resetConfirm()">
       <div class="home-btn-icon red">🗑️</div>
       <div class="home-btn-text"><h3>응답 초기화</h3><p>이번 회차 응답 데이터 삭제</p></div>
+    </div>
+    <div class="home-btn" onclick="goHistory()">
+      <div class="home-btn-icon purple">📚</div>
+      <div class="home-btn-text"><h3>지난 교육 내역</h3><p>교육 내용 · 사원별 결과 · 서명 · 문제 복사</p></div>
     </div>
     <div class="home-btn" onclick="goAnnualStats()">
       <div class="home-btn-icon blue">📅</div>
@@ -828,7 +874,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, deleteDoc, query, orderBy, writeBatch, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA2o3_v-bWdnxBwG6LktEmD-vz7YFjJnRM",
@@ -859,67 +905,11 @@ window.fbLoadQuiz = async () => {
   return snap.exists() ? snap.data() : null;
 };
 
-// 응답 저장
-window.fbSaveResponse = async (responseData) => {
-  await addDoc(collection(db, 'responses'), responseData);
-};
-
-// 응답 불러오기
-window.fbLoadResponses = async () => {
-  const snap = await getDocs(query(collection(db, 'responses'), orderBy('time')));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-};
-
 // 응답 전체 삭제
 window.fbDeleteResponses = async () => {
   const snap = await getDocs(collection(db, 'responses'));
   const dels = snap.docs.map(d => deleteDoc(doc(db, 'responses', d.id)));
   await Promise.all(dels);
-};
-
-// ── 월별 아카이브 저장 ──
-window.fbSaveArchive = async (year, month, quizData, responses) => {
-  const key = `${year}-${String(month).padStart(2,'0')}`;
-  const avgScore = responses.length
-    ? Math.round(responses.reduce((s, r) => s + r.score, 0) / responses.length / 4 * 100)
-    : 0;
-  const retrainCount = responses.filter(r => r.score / 4 < 0.5).length;
-
-  // 당시 대상 사원 스냅샷 저장 (강사 제외)
-  const snapshotBase = quizData.targetMode === 'select'
-    ? EMPLOYEES.filter(e => (quizData.targetSabuns || []).includes(e.sabun))
-    : [...EMPLOYEES];
-  const targetEmpsSnapshot = snapshotBase
-    .filter(e => e.sabun !== INSTRUCTOR_SABUN)
-    .map(e => ({ sabun: e.sabun, name: e.name, dept: e.dept, rank: e.rank }));
-
-  await setDoc(doc(db, 'archives', key), {
-    year, month, key,
-    title: quizData.title,
-    date: quizData.date,
-    questions: quizData.questions || [],
-    targetMode: quizData.targetMode,
-    targetSabuns: quizData.targetSabuns || [],
-    targetEmpsSnapshot,
-    totalTarget: targetEmpsSnapshot.length,
-    attendCount: responses.length,
-    avgScore,
-    retrainCount,
-    responses: responses.map(r => ({
-      sabun: r.sabun, name: r.name, dept: r.dept, rank: r.rank,
-      score: r.score, time: r.time, answers: r.answers
-    })),
-    savedAt: new Date().toISOString()
-  });
-};
-
-// ── 연도별 아카이브 목록 불러오기 ──
-window.fbLoadArchivesByYear = async (year) => {
-  const snap = await getDocs(collection(db, 'archives'));
-  return snap.docs
-    .map(d => d.data())
-    .filter(d => d.year === year)
-    .sort((a, b) => a.month - b.month);
 };
 
 // ── 전체 아카이브 연도 목록 ──
@@ -960,6 +950,90 @@ window.fbLoadInstructor = async () => {
   return snap.exists() ? snap.data().sabun : '0018'; // 기본값: 이광훈
 };
 
+// 회차별 보관. 큰 서명 이미지는 사원별 문서에 나누어 저장합니다.
+window.fbLoadAllArchives = async () => {
+  const snap = await getDocs(collection(db, 'archives'));
+  return snap.docs.map(d=>({...d.data(), key:d.id}));
+};
+window.fbLoadArchiveResponses = async key => {
+  const snap = await getDocs(collection(db, 'archives', key, 'responses'));
+  return snap.docs.map(d=>d.data());
+};
+window.fbLoadArchivesByYear = async year => (await window.fbLoadAllArchives())
+  .filter(a=>a.year===year).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+window.fbSaveResponse = async responseData => {
+  const currentRef = doc(db,'quiz','current');
+  const responseRef = doc(collection(db,'responses'));
+  await runTransaction(db, async tx => {
+    const current = await tx.get(currentRef);
+    const q = current.exists() ? current.data() : null;
+    if (!q || q.closing || (q.id||null)!==(responseData.quizId||null) || q.date!==state.quiz.date || q.title!==state.quiz.title) {
+      throw new Error('교육이 마감되거나 변경되었습니다. 새로고침 후 확인해 주세요.');
+    }
+    tx.set(responseRef,responseData);
+  });
+};
+window.fbLoadResponses = async () => {
+  const snap = await getDocs(query(collection(db,'responses'),orderBy('time')));
+  const quiz = state.quiz;
+  return snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>quiz && (r.quizId||null)===(quiz.id||null));
+};
+window.fbSaveArchive = async (year, month, quizData, ignoredResponses, nextQuiz = null) => {
+  const currentRef = doc(db,'quiz','current');
+  const token = crypto.randomUUID();
+  const key = `${year}-${String(month).padStart(2,'0')}-${quizData.id || crypto.randomUUID()}`;
+  // 제출과 마감을 같은 현재 교육 문서를 기준으로 조정합니다.
+  await runTransaction(db, async tx => {
+    const snap = await tx.get(currentRef);
+    const current = snap.exists() ? snap.data() : null;
+    if (!current || current.closing || (current.id||null)!==(quizData.id||null) || current.date!==quizData.date || current.title!==quizData.title) {
+      throw new Error('교육 상태가 변경되었습니다. 새로고침 후 다시 확인해 주세요.');
+    }
+    tx.update(currentRef,{closing:token});
+  });
+  try {
+    const snapshot = await getDocs(collection(db,'responses'));
+    const docs = snapshot.docs.filter(d=>(d.data().quizId||null)===(quizData.id||null));
+    if (docs.length>240) throw new Error('참여 기록이 많아 한 번에 마감할 수 없습니다. 기록은 삭제되지 않았습니다.');
+    const responses = docs.map(d=>d.data());
+    const targetEmpsSnapshot = getTargetEmps(quizData).map(e=>({...e}));
+    const totalQ = quizData.questions.length || 4;
+    const batch = writeBatch(db);
+    batch.set(doc(db,'archives',key), {
+      year,month,key,title:quizData.title,date:quizData.date,questions:quizData.questions,
+      targetMode:quizData.targetMode||'all',targetSabuns:quizData.targetSabuns||[],targetEmpsSnapshot,
+      instructor:getInstructor(),totalTarget:targetEmpsSnapshot.length,
+      attendCount:responses.length,
+      avgScore:responses.length ? Math.round(responses.reduce((s,r)=>s+r.score,0)/responses.length/totalQ*100) : 0,
+      retrainCount:responses.filter(r=>r.score/totalQ<PASS_RATE).length,
+      responses:responses.map(({signature,...r})=>r),responseStorage:'separate',savedAt:new Date().toISOString()
+    });
+    docs.forEach(d=>{
+      batch.set(doc(db,'archives',key,'responses',d.id),d.data());
+      batch.delete(doc(db,'responses',d.id));
+    });
+    if (nextQuiz) batch.set(currentRef,nextQuiz); else batch.delete(currentRef);
+    await batch.commit();
+  } catch(e) {
+    // 실패 시 응답과 현재 교육은 보존하고 마감 잠금만 해제합니다.
+    try {
+      await runTransaction(db,async tx=>{
+        const snap=await tx.get(currentRef);
+        if(snap.exists() && snap.data().closing===token) tx.update(currentRef,{closing:null});
+      });
+    } catch(unlockError) { throw new Error('저장에 실패했고 마감 잠금도 해제하지 못했습니다. 관리자 확인이 필요합니다. '+e.message); }
+    throw e;
+  }
+};
+
+window.fbCreateQuiz = async nextQuiz => {
+  await runTransaction(db, async tx=>{
+    const ref=doc(db,'quiz','current');
+    const snap=await tx.get(ref);
+    if(snap.exists()) throw new Error('다른 화면에서 교육을 등록했습니다. 새로고침 후 확인해 주세요.');
+    tx.set(ref,nextQuiz);
+  });
+};
 // 초기 로드
 window.addEventListener('load', async () => {
   showLoading(true);
@@ -1119,7 +1193,7 @@ function initRegister() {
   // 대상 초기화
   const mode = state.quiz ? (state.quiz.targetMode || 'all') : 'all';
   state.targetMode = mode;
-  state.targetSabuns = state.quiz ? (state.quiz.targetSabuns || []) : [];
+  state.targetSabuns = state.quiz ? [...(state.quiz.targetSabuns || [])] : [];
   setTargetMode(mode);
 
   // 기존값 복원
@@ -1127,6 +1201,7 @@ function initRegister() {
     document.getElementById('edu-title').value = state.quiz.title || '';
     document.getElementById('edu-date').value = state.quiz.date || todayStr();
     state.quiz.questions.forEach((q, i) => {
+      document.getElementById(`q${i+1}-explanation`).value = q.explanation || "";
       if (i < 3) {
         document.getElementById(`q${i+1}-text`).value = q.text || '';
         q.options && q.options.forEach((opt, oi) => {
@@ -1198,10 +1273,14 @@ function selectOX(val) {
 }
 
 async function resetQuiz() {
-  if (!confirm('현재 등록된 문제를 초기화하시겠습니까?\n※ Firebase 저장 데이터도 삭제됩니다.')) return;
+  if (!confirm('현재 교육을 지난 교육 내역에 보관하고 입력칸을 비우시겠습니까?')) return;
   showLoading(true, '초기화 중...');
   try {
-    await window.fbSaveQuiz(null);
+    if (state.quiz) {
+      const [year,month]=state.quiz.date.split('-').map(Number);
+      await window.fbSaveArchive(year,month,state.quiz,null);
+    }
+    state.responses=[];
     state.quiz = null;
     // 입력 필드 전체 초기화
     document.getElementById('edu-title').value = '';
@@ -1260,28 +1339,22 @@ async function saveQuiz() {
   if (state.targetMode === 'select' && state.targetSabuns.length === 0) {
     showSaveMsg('교육 대상자를 1명 이상 선택해주세요.', false); return;
   }
-  state.quiz = { title, date, questions, targetMode: state.targetMode, targetSabuns: state.targetMode === 'select' ? [...state.targetSabuns] : [] };
-
-  showLoading(true, '저장 중...');
+  const nextQuiz = { id:crypto.randomUUID(), title, date, questions, targetMode:state.targetMode, targetSabuns:state.targetMode==='select' ? [...state.targetSabuns] : [] };
+  const previousQuiz = state.quiz;
+  if (previousQuiz && !confirm('진행 중인 교육을 지난 교육 내역에 보관하고 새 교육을 시작합니다. 계속하시겠습니까?')) return;
+  showLoading(true, '교육 저장 중...');
   try {
-    // 기존 응답이 있으면 아카이브 먼저 저장 (state.responses 초기화 전에)
-    const prevResponses = [...state.responses];
-    const prevQuiz = state.quiz;
-    if (prevResponses.length > 0) {
-      const prevDate = prevQuiz.date || '';
-      const prevMonth = prevDate ? parseInt(prevDate.split('-')[1]) : new Date().getMonth() + 1;
-      const prevYear = prevDate ? parseInt(prevDate.split('-')[0]) : new Date().getFullYear();
-      try {
-        await window.fbSaveArchive(prevYear, prevMonth, prevQuiz, prevResponses);
-      } catch(ae) { console.warn('아카이브 저장 실패(무시):', ae); }
+    if (previousQuiz) {
+      const [year,month] = previousQuiz.date.split('-').map(Number);
+      await window.fbSaveArchive(year,month,previousQuiz,null,nextQuiz);
+    } else {
+      await window.fbCreateQuiz(nextQuiz);
     }
-    await window.fbSaveQuiz(state.quiz);
-    await window.fbDeleteResponses();
-    state.responses = [];
-    showSaveMsg('✅ 저장 완료!', true);
-  } catch(e) {
-    showSaveMsg('저장 실패: ' + e.message, false);
-  }
+    state.quiz=nextQuiz;
+    state.responses=[];
+    annualArchives=[]; psArchives=[];
+    showSaveMsg('✅ 저장 완료! 이전 교육은 지난 교육 내역에서 확인할 수 있습니다.',true);
+  } catch(e) { showSaveMsg('저장 실패: '+e.message,false); }
   showLoading(false);
 }
 
@@ -1673,7 +1746,7 @@ async function renderAnnualStats() {
   const totalAttend = done.reduce((s, a) => s + (a.attendCount || 0), 0);
   const avgAttendRate = done.length
     ? Math.round(done.reduce((s, a) => {
-        const tgt = a.targetMode === 'select' ? (a.targetSabuns || []).length : totalEmp;
+        const tgt = a.totalTarget ?? (a.targetMode === 'select' ? (a.targetSabuns || []).length : totalEmp);
         return s + (tgt ? a.attendCount / tgt * 100 : 0);
       }, 0) / done.length)
     : 0;
@@ -1684,7 +1757,7 @@ async function renderAnnualStats() {
 
   document.getElementById('annual-summary-grid').innerHTML = `
     <div class="stat-card">
-      <div class="stat-card-num" style="color:var(--accent);">${done.length}<span style="font-size:14px;font-weight:400;color:var(--text-muted);"> / 12</span></div>
+      <div class="stat-card-num" style="color:var(--accent);">${done.length}<span style="font-size:14px;font-weight:400;color:var(--text-muted);">회</span></div>
       <div class="stat-card-label">실시 교육 횟수</div>
     </div>
     <div class="stat-card">
@@ -1702,8 +1775,7 @@ async function renderAnnualStats() {
   `;
 
   let html = '';
-  for (let m = 1; m <= 12; m++) {
-    const a = annualArchives.find(x => x.month === m);
+  for (const {m,a} of archiveRowsForYear(annualArchives)) {
     if (!a) {
       html += `<tr>
         <td style="text-align:center;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);font-size:11px;font-weight:600;line-height:24px;text-align:center;color:var(--text-muted);">${m}</span></td>
@@ -1712,7 +1784,7 @@ async function renderAnnualStats() {
       </tr>`;
       continue;
     }
-    const tgt = a.targetMode === 'select' ? (a.targetSabuns || []).length : totalEmp;
+    const tgt = a.totalTarget ?? (a.targetMode === 'select' ? (a.targetSabuns || []).length : totalEmp);
     const attendRate = tgt ? Math.round(a.attendCount / tgt * 100) : 0;
     const rateColor = attendRate >= 90 ? 'var(--success)' : attendRate >= 70 ? 'var(--accent)' : 'var(--danger)';
     const scoreColor = a.avgScore >= 80 ? 'var(--success)' : a.avgScore >= 60 ? 'var(--accent)' : 'var(--danger)';
@@ -1735,7 +1807,7 @@ async function renderAnnualStats() {
   // 합계 행
   if (done.length > 0) {
     const sumTgt = done.reduce((s, a) => {
-      const t = a.targetMode === 'select' ? (a.targetSabuns || []).length : totalEmp;
+      const t = a.totalTarget ?? (a.targetMode === 'select' ? (a.targetSabuns || []).length : totalEmp);
       return s + t;
     }, 0);
     html += `<tr style="background:var(--surface2);font-size:12px;color:var(--text-muted);">
@@ -1779,27 +1851,28 @@ function renderArchiveDetail() {
   const a = currentArchive;
   if (!a) return;
 
-  const instructor = getInstructor();
+  const instructor = a.instructor || null;
+  const archiveInstructorSabun = a.instructor?.sabun || '';
   const currentSabuns = new Set(EMPLOYEES.map(e => e.sabun));
 
-  const responses = (a.responses || []).filter(r => r.sabun !== INSTRUCTOR_SABUN);
+  const responses = (a.responses || []).filter(r => r.sabun !== archiveInstructorSabun);
 
   // 스냅샷 우선, 없으면(구버전) 응답자 + select 대상자 기준으로 구성
   let snapshot;
   if (a.targetEmpsSnapshot && a.targetEmpsSnapshot.length > 0) {
-    snapshot = a.targetEmpsSnapshot.filter(e => e.sabun !== INSTRUCTOR_SABUN);
+    snapshot = a.targetEmpsSnapshot.filter(e => e.sabun !== archiveInstructorSabun);
   } else {
     // 구버전: 응답한 사람 + targetMode select인 경우 targetSabuns 기준
     const respondedSabuns = new Set(responses.map(r => r.sabun));
     if (a.targetMode === 'select') {
-      const targetSet = new Set((a.targetSabuns || []).filter(s => s !== INSTRUCTOR_SABUN));
+      const targetSet = new Set((a.targetSabuns || []).filter(s => s !== archiveInstructorSabun));
       snapshot = EMPLOYEES.filter(e => targetSet.has(e.sabun));
     } else {
       // 전체대상 구버전: 실제 응답한 사람만 snapshot으로 사용
-      snapshot = EMPLOYEES.filter(e => respondedSabuns.has(e.sabun) && e.sabun !== INSTRUCTOR_SABUN);
+      snapshot = EMPLOYEES.filter(e => respondedSabuns.has(e.sabun) && e.sabun !== archiveInstructorSabun);
       // 응답했지만 퇴사한 사람도 포함
       responses.forEach(r => {
-        if (!currentSabuns.has(r.sabun) && r.sabun !== INSTRUCTOR_SABUN) {
+        if (!currentSabuns.has(r.sabun) && r.sabun !== archiveInstructorSabun) {
           if (!snapshot.find(e => e.sabun === r.sabun)) {
             snapshot.push({ sabun: r.sabun, name: r.name, dept: r.dept, rank: r.rank });
           }
@@ -1919,24 +1992,25 @@ function renderArchiveDetail() {
 function printArchiveDetail() {
   const a = currentArchive;
   if (!a) return;
-  const instructor = getInstructor();
+  const instructor = a.instructor || null;
+  const archiveInstructorSabun = a.instructor?.sabun || '';
   const currentSabuns = new Set(EMPLOYEES.map(e => e.sabun));
 
-  const responses = (a.responses || []).filter(r => r.sabun !== INSTRUCTOR_SABUN);
+  const responses = (a.responses || []).filter(r => r.sabun !== archiveInstructorSabun);
 
   // 스냅샷 우선, 없으면(구버전) 응답자 기준으로 구성
   let snapshot;
   if (a.targetEmpsSnapshot && a.targetEmpsSnapshot.length > 0) {
-    snapshot = a.targetEmpsSnapshot.filter(e => e.sabun !== INSTRUCTOR_SABUN);
+    snapshot = a.targetEmpsSnapshot.filter(e => e.sabun !== archiveInstructorSabun);
   } else {
     const respondedSabuns = new Set(responses.map(r => r.sabun));
     if (a.targetMode === 'select') {
-      const targetSet = new Set((a.targetSabuns || []).filter(s => s !== INSTRUCTOR_SABUN));
+      const targetSet = new Set((a.targetSabuns || []).filter(s => s !== archiveInstructorSabun));
       snapshot = EMPLOYEES.filter(e => targetSet.has(e.sabun));
     } else {
-      snapshot = EMPLOYEES.filter(e => respondedSabuns.has(e.sabun) && e.sabun !== INSTRUCTOR_SABUN);
+      snapshot = EMPLOYEES.filter(e => respondedSabuns.has(e.sabun) && e.sabun !== archiveInstructorSabun);
       responses.forEach(r => {
-        if (!currentSabuns.has(r.sabun) && r.sabun !== INSTRUCTOR_SABUN) {
+        if (!currentSabuns.has(r.sabun) && r.sabun !== archiveInstructorSabun) {
           if (!snapshot.find(e => e.sabun === r.sabun)) {
             snapshot.push({ sabun: r.sabun, name: r.name, dept: r.dept, rank: r.rank });
           }
@@ -2126,7 +2200,14 @@ async function renderPersonalList() {
   }
 
   function dotHtml(emp, month) {
-    const a = psArchives.find(x => x.month === month);
+    const monthly = psArchives.filter(x=>x.month===month && isInArchiveTarget(x,emp.sabun));
+    if(monthly.length>1) {
+      const completed=monthly.filter(a=>(a.responses||[]).some(r=>r.sabun===emp.sabun)).length;
+      const needs=monthly.some(a=>(a.responses||[]).some(r=>r.sabun===emp.sabun && r.score/4<PASS_RATE));
+      return '<span style="font-size:11px;color:'+ (completed<monthly.length||needs?'var(--danger)':'var(--success)') +'">'+completed+'/'+monthly.length+(needs?'△':'')+'</span>';
+    }
+
+    const a = monthly[0];
     if (!a) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);font-size:9px;line-height:18px;text-align:center;color:var(--text-muted);">-</span>`;
     if (!isInArchiveTarget(a, emp.sabun)) return `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2);font-size:9px;line-height:18px;text-align:center;color:var(--text-muted);">-</span>`;
     const r = (a.responses || []).find(x => x.sabun === emp.sabun);
@@ -2136,7 +2217,7 @@ async function renderPersonalList() {
   }
 
   let filtered = EMPLOYEES.filter(e => {
-    if (e.sabun === INSTRUCTOR_SABUN) return false; // 강사 제외
+    if (e.sabun === archiveInstructorSabun) return false; // 강사 제외
     const matchS = e.name.toLowerCase().includes(search) || e.sabun.includes(search);
     const matchD = !deptF || e.dept === deptF;
     const matchSt = !statusF || getPsStatus(e) === statusF;
@@ -2144,7 +2225,7 @@ async function renderPersonalList() {
   });
 
   // 강사 제외한 전체 인원 기준으로 요약 계산
-  const empForSummary = EMPLOYEES.filter(e => e.sabun !== INSTRUCTOR_SABUN);
+  const empForSummary = EMPLOYEES.filter(e => e.sabun !== archiveInstructorSabun);
   const allOk = empForSummary.filter(e => getPsStatus(e) === 'ok').length;
   const allDanger = empForSummary.filter(e => getPsStatus(e) === 'danger').length;
   const avgScoreAll = empForSummary.length
@@ -2230,8 +2311,7 @@ function psShowDetail(sabun) {
     : `<span class="badge badge-danger">재교육 대상</span>`;
 
   let rows = '';
-  for (let m = 1; m <= 12; m++) {
-    const a = psArchives.find(x => x.month === m);
+  for (const {m,a} of archiveRowsForYear(psArchives)) {
     if (!a) {
       rows += `<tr>
         <td style="text-align:center;font-size:12px;color:var(--text-muted);">${m}월</td>
@@ -2413,7 +2493,7 @@ function printAnnualStats() {
 
   const avgAttendRate = done.length
     ? Math.round(done.reduce((s,a) => {
-        const t = a.targetMode==='select' ? (a.targetSabuns||[]).length : totalEmp;
+        const t = a.totalTarget ?? (a.targetMode==='select' ? (a.targetSabuns||[]).length : totalEmp);
         return s + (t ? a.attendCount/t*100 : 0);
       }, 0) / done.length)
     : 0;
@@ -2421,18 +2501,17 @@ function printAnnualStats() {
   const totalRetrain = done.reduce((s,a)=>s+(a.retrainCount||0),0);
   const totalAttend = done.reduce((s,a)=>s+(a.attendCount||0),0);
   const sumTgt = done.reduce((s,a) => {
-    const t = a.targetMode==='select' ? (a.targetSabuns||[]).length : totalEmp;
+    const t = a.totalTarget ?? (a.targetMode==='select' ? (a.targetSabuns||[]).length : totalEmp);
     return s + t;
   }, 0);
 
   let rows = '';
-  for (let m = 1; m <= 12; m++) {
-    const a = annualArchives.find(x => x.month === m);
+  for (const {m,a} of archiveRowsForYear(annualArchives)) {
     if (!a) {
       rows += `<tr><td>${m}월</td><td class="left" colspan="7" style="color:#aaa;font-style:italic;">미실시</td></tr>`;
       continue;
     }
-    const tgt = a.targetMode==='select' ? (a.targetSabuns||[]).length : totalEmp;
+    const tgt = a.totalTarget ?? (a.targetMode==='select' ? (a.targetSabuns||[]).length : totalEmp);
     const attendRate = tgt ? Math.round(a.attendCount/tgt*100) : 0;
     const dateStr = a.date ? a.date.replace(/^\d{4}-/,'').replace('-','/') : '-';
     const rateColor = attendRate>=90?'#2e7d32':attendRate>=70?'#1565C0':'#c62828';
@@ -2466,7 +2545,7 @@ function printAnnualStats() {
       <div style="font-size:11px;color:#888;">교육 퀴즈 시스템</div>
     </div>
     <div class="summary-grid">
-      <div class="s-card"><div class="s-num" style="color:#1565C0;">${done.length}<span style="font-size:13px;font-weight:400;color:#888;"> / 12회</span></div><div class="s-label">실시 교육</div></div>
+      <div class="s-card"><div class="s-num" style="color:#1565C0;">${done.length}<span style="font-size:13px;font-weight:400;color:#888;">회</span></div><div class="s-label">실시 교육</div></div>
       <div class="s-card"><div class="s-num" style="color:#2e7d32;">${avgAttendRate}%</div><div class="s-label">평균 참여율</div></div>
       <div class="s-card"><div class="s-num" style="color:#1565C0;">${avgScore}%</div><div class="s-label">평균 정답률</div></div>
       <div class="s-card"><div class="s-num" style="color:${totalRetrain>0?'#c62828':'#2e7d32'};">${totalRetrain}명</div><div class="s-label">누적 재교육</div></div>
@@ -2524,7 +2603,13 @@ function printPersonalList() {
     return {attended,applicable,rate,avg,retrains};
   }
   function dotStr(emp, month) {
-    const a = psArchives.find(x=>x.month===month);
+    const monthly=psArchives.filter(x=>x.month===month && isInArchiveTarget(x,emp.sabun));
+    if(monthly.length>1) {
+      const completed=monthly.filter(a=>(a.responses||[]).some(r=>r.sabun===emp.sabun)).length;
+      const needs=monthly.some(a=>(a.responses||[]).some(r=>r.sabun===emp.sabun && r.score/4<PASS_RATE));
+      return completed+'/'+monthly.length+(needs?'△':'');
+    }
+    const a = monthly[0];
     if (!a) return `<span class="dot-n">-</span>`;
     if (!isInArchiveTarget(a, emp.sabun)) return `<span class="dot-n">-</span>`;
     const r=(a.responses||[]).find(x=>x.sabun===emp.sabun);
@@ -2636,8 +2721,7 @@ function printPersonalDetail() {
   const year=parseInt(document.getElementById('ps-year').value);
 
   let rows='';
-  for(let m=1;m<=12;m++){
-    const a=psArchives.find(x=>x.month===m);
+  for(const {m,a} of archiveRowsForYear(psArchives)){
     if(!a){rows+=`<tr><td>${m}월</td><td class="left" style="color:#aaa;font-style:italic;">미실시</td><td>-</td><td><span class="badge badge-gray">미실시</span></td><td>-</td></tr>`;continue;}
     const dateStr=a.date?a.date.replace(/^\d{4}-/,'').replace('-','/'):'- ';
     if(!isInArchiveTarget(a,emp.sabun)){rows+=`<tr><td>${m}월</td><td class="left" style="color:#aaa;">${a.title}</td><td style="color:#aaa;">${dateStr}</td><td><span class="badge badge-gray">-</span></td><td>-</td></tr>`;continue;}
@@ -2720,10 +2804,8 @@ async function closeMonthlyEdu() {
 
   showLoading(true, '마감 저장 중...');
   try {
-    await window.fbSaveArchive(year, month, quiz, state.responses);
-    // 마감 완료 후 현재 문제·응답 초기화
-    await window.fbSaveQuiz(null);
-    await window.fbDeleteResponses();
+    await window.fbSaveArchive(year, month, quiz, null);
+    annualArchives=[]; psArchives=[];
     state.quiz = null;
     state.responses = [];
     msgEl.style.color = 'var(--success)';
@@ -2967,7 +3049,8 @@ function initSignCanvas() {
     signCanvas.height = 360 * dpr;
     signCtx = signCanvas.getContext('2d');
     signCtx.scale(dpr, dpr);
-    signCtx.strokeStyle = '#111';
+    paintSignBackground();
+    signCtx.strokeStyle = '#000000';
     signCtx.lineWidth = 2.5;
     signCtx.lineCap = 'round';
     signCtx.lineJoin = 'round';
@@ -2989,8 +3072,17 @@ function getPos(e) {
   return { x: clientX - rect.left, y: clientY - rect.top };
 }
 
+function paintSignBackground() {
+  // 실제 이미지 픽셀도 흰색으로 채워 저장 이미지의 투명 배경을 방지합니다.
+  signCtx.save();
+  signCtx.setTransform(1, 0, 0, 1, 0, 0);
+  signCtx.fillStyle = '#ffffff';
+  signCtx.fillRect(0, 0, signCanvas.width, signCanvas.height);
+  signCtx.restore();
+}
+
 function clearSign() {
-  if (signCtx) { signCtx.clearRect(0, 0, signCanvas.width, signCanvas.height); hasSigned = false; }
+  if (signCtx) { paintSignBackground(); hasSigned = false; }
 }
 
 async function submitSign() {
@@ -3003,7 +3095,7 @@ async function submitSign() {
   const responseData = {
     sabun: currentParticipant.sabun, name: currentParticipant.name,
     dept: currentParticipant.dept, rank: currentParticipant.rank,
-    answers: [...currentAnswers], score, time,
+    answers: [...currentAnswers], score, time, quizId:state.quiz.id || null, submittedAt:new Date().toISOString(),
     signature: signDataUrl,
   };
 
@@ -3201,6 +3293,75 @@ async function deleteEmployee(sabun) {
     alert('삭제 실패: ' + e.message);
   }
   showLoading(false);
+}
+
+let educationHistory = [];
+function safeText(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+async function goHistory() {
+  go('screen-history');
+  const box = document.getElementById('history-list');
+  box.textContent = '지난 교육을 불러오는 중입니다…';
+  try {
+    educationHistory = await window.fbLoadAllArchives();
+    educationHistory.sort((a,b) => String(b.date).localeCompare(String(a.date)) || String(b.savedAt).localeCompare(String(a.savedAt)));
+    renderHistory();
+  } catch(e) { box.textContent = '불러오지 못했습니다. 다시 시도해 주세요. ' + e.message; }
+}
+function renderHistory() {
+  const term = document.getElementById('history-search').value.trim().toLowerCase();
+  const matches = educationHistory.map((a,i)=>({a,i})).filter(({a}) => (a.title+' '+a.date).toLowerCase().includes(term));
+  document.getElementById('history-list').innerHTML = matches.length ? matches.map(({a,i})=>`
+    <div class="card" style="margin-bottom:12px;">
+      <div style="font-size:12px;color:var(--text-muted)">${safeText(fmtDate(a.date))}</div>
+      <h3 style="margin:8px 0">${safeText(a.title)}</h3>
+      <p style="font-size:13px;margin-bottom:14px">참여 ${a.attendCount ?? (a.responses||[]).length}명 · 문제 ${(a.questions||[]).length}개</p>
+      <button class="btn btn-primary" onclick="openHistory(${i})">교육 내용 · 결과 · 서명 보기</button>
+    </div>`).join('') : '<div class="card">저장된 교육이 없습니다. 진행 중인 교육을 마감하면 이곳에 표시됩니다.</div>';
+}
+async function openHistory(index) {
+  const a = educationHistory[index];
+  if (!a) return;
+  go('screen-history-detail');
+  const box = document.getElementById('history-detail-content');
+  box.textContent = '서명과 교육 내용을 불러오는 중입니다…';
+  try {
+    const responses = a.responseStorage === 'separate' ? await window.fbLoadArchiveResponses(a.key) : (a.responses||[]);
+    box.innerHTML = `<div class="card"><h2>${safeText(a.title)}</h2><p style="margin-top:10px">${safeText(fmtDate(a.date))}</p>
+      <p style="margin-top:8px">강사: ${safeText(a.instructor?.name || '과거 기록 없음')} · 참여 ${responses.length}명</p></div>
+      <button class="btn btn-success" style="margin:16px 0" onclick="copyHistory(${index})">복사해서 새 교육 등록</button>
+      ${(a.questions||[]).map((q,i)=>`<div class="card" style="margin-bottom:12px"><h3>${i+1}. ${safeText(q.text)}</h3>
+        ${q.type==='mc' ? (q.options||[]).map((v,j)=>`<p style="margin-top:8px">${OPT_LABELS[j]} ${safeText(v)}</p>`).join('') : '<p>O / X</p>'}
+        <p style="margin-top:14px;color:var(--success)">정답: ${safeText(q.type==='mc' ? OPT_LABELS[q.answer]+' '+q.options[q.answer] : q.answer)}</p>
+        <p style="margin-top:10px;white-space:pre-wrap">해설: ${safeText(q.explanation || '등록된 해설 없음')}</p></div>`).join('')}
+      <h3 style="margin:18px 0">사원별 결과 · 서명</h3>
+      ${responses.map(r=>`<div class="card" style="margin-bottom:12px"><strong>${safeText(r.name)}</strong> · ${safeText(r.dept)}
+        <p style="margin:10px 0">점수 ${r.score} / ${(a.questions||[]).length || 4} · ${safeText(r.submittedAt || r.time || '')}</p>
+        ${/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(r.signature||'') ? `<img alt="${safeText(r.name)} 서명" src="${r.signature}" style="display:block;width:100%;max-height:180px;object-fit:contain;background:#fff;color-scheme:only light;forced-color-adjust:none;border-radius:8px">` : '<p style="color:var(--text-muted)">보관된 서명이 없습니다.</p>'}</div>`).join('') || '<p>참여 기록이 없습니다.</p>'}`;
+  } catch(e) { box.textContent = '상세 내용을 불러오지 못했습니다. ' + e.message; }
+}
+function copyHistory(index) {
+  const a = educationHistory[index];
+  if (!a) return;
+  if ((a.questions||[]).length!==4 || a.questions.slice(0,3).some(q=>q.type!=='mc') || a.questions[3].type!=='ox') {
+    alert('이 교육은 현재 문제 등록 형식과 달라 자동 복사할 수 없습니다.'); return;
+  }
+  const active = state.quiz;
+  try {
+    state.quiz = {...a, date:todayStr(), targetMode:'all', targetSabuns:[]};
+    initRegister();
+  } finally { state.quiz = active; }
+  showSaveMsg('복사되었습니다. 날짜와 대상을 확인하세요. 저장하면 진행 중인 교육은 보관되고 새 교육이 시작됩니다.', true);
+  go('screen-register');
+}
+
+// 같은 달의 모든 회차를 표에 표시합니다.
+function archiveRowsForYear(archives) {
+  return Array.from({length:12},(_,i)=>i+1).flatMap(month => {
+    const entries = archives.filter(a=>a.month===month).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    return entries.length ? entries.map(a=>({m:month,a})) : [{m:month,a:null}];
+  });
 }
 
 function showLoading(on, msg='불러오는 중...') {
