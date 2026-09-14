@@ -614,6 +614,7 @@
   <div style="height:40px;"></div>
   <div class="result-icon" id="done-icon">🎉</div>
   <div class="result-title" style="margin-top:12px;" id="done-title">제출 완료!</div>
+  <div class="result-sub" id="done-education-date"></div>
   <div class="result-sub" style="margin-top:6px;" id="done-sub"></div>
   <div class="result-score">
     <div class="result-score-num" id="done-score">-</div>
@@ -2879,7 +2880,7 @@ function participantLogin() {
       <div class="info-row"><span>부서</span><span>${existing.dept}</span></div>
       <div class="info-row"><span>점수</span><span>${existing.score} / ${TOTAL_Q}</span></div>
       <div class="info-row"><span>결과</span><span style="color:${isR?'var(--danger)':'var(--success)'};font-weight:700;">${isR?'⚠️ 재교육 대상':'✅ 통과'}</span></div>
-      <div class="info-row"><span>참여시각</span><span>${existing.time}</span></div>`;
+      <div class="info-row"><span>교육일</span><span>${fmtDate(existing.educationDate || state.quiz.date)}</span></div>`;
     go('screen-already');
     return;
   }
@@ -3028,6 +3029,8 @@ function submitQuiz() {
   document.getElementById('sign-user-info').innerHTML =
     `<span style="font-weight:700;">${currentParticipant.name}</span> &nbsp;·&nbsp; ${currentParticipant.dept} &nbsp;·&nbsp; 점수: <span style="color:${isRetrain?'var(--danger)':'var(--success)'};">${score}/${TOTAL_Q}</span>`;
 
+  document.getElementById('sign-user-info').innerHTML += `<div style="margin-top:8px;">교육일: ${fmtDate(quiz.date)}</div>`;
+
   // 서명 캔버스 초기화
   go('screen-sign');
   initSignCanvas();
@@ -3095,7 +3098,7 @@ async function submitSign() {
   const responseData = {
     sabun: currentParticipant.sabun, name: currentParticipant.name,
     dept: currentParticipant.dept, rank: currentParticipant.rank,
-    answers: [...currentAnswers], score, time, quizId:state.quiz.id || null, submittedAt:new Date().toISOString(),
+    answers: [...currentAnswers], score, time, educationDate:state.quiz.date, quizId:state.quiz.id || null, submittedAt:new Date().toISOString(),
     signature: signDataUrl,
   };
 
@@ -3113,6 +3116,7 @@ async function submitSign() {
   const isRetrain = score / TOTAL_Q < PASS_RATE;
   document.getElementById('done-icon').textContent = isRetrain ? '⚠️' : '🎉';
   document.getElementById('done-title').textContent = '제출 완료!';
+  document.getElementById('done-education-date').textContent = `교육일: ${fmtDate(state.quiz.date)}`;
   document.getElementById('done-score').textContent = `${score} / ${state.quiz.questions.length}`;
   document.getElementById('done-sub').textContent = isRetrain
     ? `정답률 ${Math.round(score/TOTAL_Q*100)}% — 50% 미만입니다`
@@ -3337,7 +3341,7 @@ async function openHistory(index) {
         <p style="margin-top:10px;white-space:pre-wrap">해설: ${safeText(q.explanation || '등록된 해설 없음')}</p></div>`).join('')}
       <h3 style="margin:18px 0">사원별 결과 · 서명</h3>
       ${responses.map(r=>`<div class="card" style="margin-bottom:12px"><strong>${safeText(r.name)}</strong> · ${safeText(r.dept)}
-        <p style="margin:10px 0">점수 ${r.score} / ${(a.questions||[]).length || 4} · ${safeText(r.submittedAt || r.time || '')}</p>
+        <p style="margin:10px 0">점수 ${r.score} / ${(a.questions||[]).length || 4} · 교육일: ${safeText(fmtDate(r.educationDate || a.date))}</p>
         ${/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(r.signature||'') ? `<img alt="${safeText(r.name)} 서명" src="${r.signature}" style="display:block;width:100%;max-height:180px;object-fit:contain;background:#fff;color-scheme:only light;forced-color-adjust:none;border-radius:8px">` : '<p style="color:var(--text-muted)">보관된 서명이 없습니다.</p>'}</div>`).join('') || '<p>참여 기록이 없습니다.</p>'}`;
   } catch(e) { box.textContent = '상세 내용을 불러오지 못했습니다. ' + e.message; }
 }
